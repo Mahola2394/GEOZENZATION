@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+/* base reset (the Claude viewer used to add this) */
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; font: 14px system-ui, -apple-system, "Segoe UI", sans-serif; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+</style>
+<title>Geo Tension</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: atlas game board (top-10 list as an elevation ladder) beside a live scoreboard rail */
+:root {
+  --bg: #E4EBE9;
+  --surface: #F7F9F8;
+  --surface-2: #EDF2F0;
+  --ink: #13233A;
+  --muted: #56677A;
+  --line: #C6D2CF;
+  --accent: #1D5C88;
+  --accent-ink: #FFFFFF;
+  --hit: #2A7A4B;
+  --tension: #C5321C;
+  --miss: #6E7B88;
+  --contour: rgba(29, 92, 136, 0.09);
+  --p1: #0D7F84; --p2: #6A45B5; --p3: #A86E12; --p4: #2B5CA8;
+  /* hypsometric tints: rank 1 = summit, rank 10 = lowland */
+  --h1: #7E4630; --h2: #95573A; --h3: #AE6C40; --h4: #C58447; --h5: #D29E4F;
+  --h6: #C9B259; --h7: #A9B45C; --h8: #86AA5C; --h9: #65A05D; --h10: #4C925C;
+  --display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1822; --surface: #142330; --surface-2: #1A2C3B; --ink: #E3ECF2; --muted: #93A6B5;
+    --line: #2A3F51; --accent: #5BAAD8; --accent-ink: #061420; --hit: #5DCB8C; --tension: #FF6C50;
+    --miss: #8B98A5; --contour: rgba(91, 170, 216, 0.07);
+    --p1: #3CC4C9; --p2: #A98DF2; --p3: #EBB24C; --p4: #6F9DEB;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1822; --surface: #142330; --surface-2: #1A2C3B; --ink: #E3ECF2; --muted: #93A6B5;
+  --line: #2A3F51; --accent: #5BAAD8; --accent-ink: #061420; --hit: #5DCB8C; --tension: #FF6C50;
+  --miss: #8B98A5; --contour: rgba(91, 170, 216, 0.07);
+  --p1: #3CC4C9; --p2: #A98DF2; --p3: #EBB24C; --p4: #6F9DEB;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background-color: var(--bg);
+  background-image: repeating-radial-gradient(circle at 92% -8%, transparent 0 26px, var(--contour) 26px 27px);
+  background-attachment: fixed;
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { font-family: var(--display); font-weight: 900; font-size: clamp(34px, 6vw, 52px); letter-spacing: 0.02em; line-height: 0.9; margin: 0; text-transform: uppercase; }
+.brand span { color: var(--tension); }
+.tag { color: var(--muted); margin: 0; font-size: 14px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 22px; align-items: start; }
+@media (max-width: 880px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+h2, h3 { margin: 0; }
+.eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.label { font-weight: 700; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+button { font: inherit; color: inherit; cursor: pointer; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 16px; font-weight: 600; transition: transform .08s ease, background .15s ease; }
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+.btn.big { padding: 13px 22px; font-size: 16px; }
+.btn.small { padding: 6px 10px; font-size: 13px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input[type="text"], textarea {
+  font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 12px; width: 100%; min-width: 0;
+}
+textarea { font-family: var(--mono); font-size: 13px; line-height: 1.55; resize: vertical; }
+
+/* setup */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 8px 16px; font-family: var(--mono); font-weight: 700; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.names { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 520px) { .names { grid-template-columns: minmax(0, 1fr); } }
+.pname { display: flex; align-items: center; gap: 10px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 520px) { .settings { grid-template-columns: minmax(0, 1fr); } }
+.stepper { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border-radius: 8px; padding: 10px 12px; }
+.stepper .ctl { display: flex; align-items: center; gap: 8px; }
+.stepper .ctl button { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); font-weight: 700; }
+.stepper .num { font-family: var(--mono); font-weight: 700; font-size: 18px; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 520px) { .cats { grid-template-columns: minmax(0, 1fr); } }
+.cat { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--surface); }
+.cat:has(input:checked) { border-color: var(--accent); background: var(--surface-2); }
+.cat input { margin-top: 3px; accent-color: var(--accent); }
+.cat b { display: block; font-size: 14.5px; }
+.cat small { color: var(--muted); font-size: 12.5px; display: block; }
+.cat .del { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; padding: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.row.end { justify-content: flex-end; }
+.hint { color: var(--muted); font-size: 13px; margin: 0; }
+.err { color: var(--tension); font-size: 13.5px; font-weight: 600; margin: 0; }
+
+/* round head */
+.round-head h2 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 5vw, 44px); line-height: 1; text-transform: uppercase; letter-spacing: 0.01em; text-wrap: balance; margin-top: 6px; }
+.round-head p.prompt { margin: 8px 0 0; color: var(--muted); max-width: 62ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+.chip.t { border-color: var(--tension); color: var(--tension); background: transparent; }
+
+/* turn */
+.turn { display: flex; flex-direction: column; gap: 12px; border-top: 4px solid var(--pc, var(--accent)); }
+.who-now { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.who-now .name { font-family: var(--display); font-weight: 800; font-size: 26px; text-transform: uppercase; line-height: 1; color: var(--pc); }
+.pips { display: flex; gap: 5px; margin-left: auto; align-items: center; }
+.pip { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--pc); }
+.pip.on { background: var(--pc); }
+.pips span.txt { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
+form.guess { display: flex; gap: 8px; flex-wrap: wrap; }
+form.guess input { flex: 1 1 200px; font-size: 17px; padding: 12px 14px; }
+
+.flash { border-radius: 8px; padding: 10px 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; animation: flashIn .35s ease; }
+.flash .pts { font-family: var(--mono); font-weight: 700; font-size: 18px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.flash.hit { background: color-mix(in srgb, var(--hit) 14%, transparent); color: var(--hit); }
+.flash.tension { background: color-mix(in srgb, var(--tension) 14%, transparent); color: var(--tension); }
+.flash.miss { background: color-mix(in srgb, var(--miss) 16%, transparent); color: var(--ink); }
+.flash.info { background: var(--surface-2); color: var(--muted); }
+@keyframes flashIn { from { transform: translateY(-4px); opacity: .3; } to { transform: none; opacity: 1; } }
+.flash.tension { animation: shake .4s ease; }
+@keyframes shake { 0%,100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+
+/* board */
+.board { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.slot {
+  display: grid; grid-template-columns: 8px 46px minmax(0, 1fr) auto; align-items: center;
+  min-height: 50px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden;
+}
+.slot .band { align-self: stretch; background: var(--h); }
+.slot .rk { font-family: var(--display); font-weight: 900; font-size: 26px; text-align: center; color: var(--muted); }
+.slot .ans { padding: 8px 6px; min-width: 0; }
+.slot .ans b { font-size: 16.5px; display: block; overflow-wrap: anywhere; }
+.slot .ans small { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.slot .hid { display: block; height: 10px; width: 46%; border-radius: 5px; background: repeating-linear-gradient(90deg, var(--line) 0 8px, transparent 8px 13px); }
+.slot .end { padding: 0 12px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.slot .worth { font-family: var(--mono); font-weight: 700; }
+.slot.found { border-color: color-mix(in srgb, var(--pc) 55%, var(--line)); }
+.slot.found .rk { color: var(--ink); }
+.slot.missed .ans b { color: var(--muted); font-weight: 600; }
+.slot.pop { animation: pop .5s ease; }
+@keyframes pop { 0% { transform: scale(.97); background: color-mix(in srgb, var(--pc) 22%, var(--surface)); } 100% { transform: none; } }
+.pchip { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--pc); font-size: 13px; }
+.pchip .dot { width: 10px; height: 10px; background: var(--pc); }
+.pchip .plus { font-family: var(--mono); }
+
+.tension-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.source { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+/* round summary */
+.summary h3 { font-family: var(--display); font-size: 28px; font-weight: 800; text-transform: uppercase; line-height: 1; }
+.rpts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.rpt { border-radius: 8px; padding: 10px 12px; background: var(--surface-2); border-left: 4px solid var(--pc); }
+.rpt .n { font-weight: 700; font-size: 13.5px; overflow-wrap: anywhere; }
+.rpt .v { font-family: var(--mono); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; }
+
+/* sidebar */
+aside.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); display: flex; flex-direction: column; gap: 14px; }
+@media (max-width: 880px) { aside.side { position: static; } }
+.side h2 { font-family: var(--display); font-weight: 800; font-size: 26px; text-transform: uppercase; line-height: 1; }
+.scores { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.score { display: grid; grid-template-columns: 22px 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 10px; border-radius: 8px; background: var(--surface-2); border: 2px solid transparent; }
+.score.now { border-color: var(--pc); }
+.score .pos { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.score .dot { background: var(--pc); width: 12px; height: 12px; }
+.score .nm { font-weight: 700; overflow-wrap: anywhere; }
+.score .nm small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.score .tot { font-family: var(--mono); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; text-align: right; }
+.delta { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.delta.up { color: var(--hit); }
+.delta.down { color: var(--tension); }
+.hist-wrap { overflow-x: auto; }
+table.hist { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+table.hist th, table.hist td { padding: 5px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+table.hist th:first-child, table.hist td:first-child { text-align: left; color: var(--muted); font-weight: 500; }
+table.hist td { font-family: var(--mono); }
+table.hist tfoot td { font-weight: 700; border-bottom: 0; }
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; font-size: 13px; }
+.log li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.log .dot { width: 8px; height: 8px; background: var(--pc); }
+.log .g { overflow-wrap: anywhere; }
+.log .r { font-family: var(--mono); font-weight: 700; }
+.log .r.hit { color: var(--hit); } .log .r.tension { color: var(--tension); } .log .r.miss { color: var(--muted); } .log .r.pass { color: var(--muted); font-weight: 500; }
+
+.rules { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.rules li { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.rules .k { font-family: var(--mono); font-weight: 700; font-size: 17px; text-align: right; }
+.rules .k.hit { color: var(--hit); } .rules .k.t { color: var(--tension); } .rules .k.m { color: var(--miss); }
+.ladder { display: flex; gap: 3px; margin-top: 4px; }
+.ladder span { flex: 1; height: 26px; border-radius: 4px; background: var(--h); color: #fff; font-family: var(--display); font-weight: 900; font-size: 15px; display: grid; place-items: center; }
+
+/* final */
+.winner { text-align: left; }
+.winner .crown { font-family: var(--display); font-weight: 900; font-size: clamp(40px, 8vw, 72px); line-height: .9; text-transform: uppercase; color: var(--pc); overflow-wrap: anywhere; }
+.podium { display: flex; flex-direction: column; gap: 6px; }
+.podium .score { background: var(--surface-2); }
+
+
+/* secret entry + reveal */
+.cover { border-top: 4px solid var(--pc); }
+.cover-name { font-family: var(--display); font-weight: 900; font-size: clamp(40px, 8vw, 64px); line-height: .95; text-transform: uppercase; color: var(--pc); overflow-wrap: anywhere; }
+.entry-list { display: flex; flex-direction: column; gap: 8px; }
+.entry-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; }
+.entry-row .num { font-family: var(--display); font-weight: 900; font-size: 22px; color: var(--pc); text-align: center; }
+.entry-row input { font-size: 17px; padding: 12px 14px; }
+.ladder.big span { height: auto; padding: 6px 0; display: flex; flex-direction: column; gap: 1px; }
+.ladder.scored .step { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ladder.scored i { width: 100%; height: 26px; border-radius: 4px; background: var(--h); color: #fff; font-style: normal; font-family: var(--display); font-weight: 900; font-size: 15px; display: grid; place-items: center; }
+.ladder.scored em { font-style: normal; font-family: var(--mono); font-weight: 700; font-size: 11.5px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
+.ladder.scored em.neg { color: var(--tension); }
+.ladder.scored em.pos { color: var(--hit); }
+.ladder.scored em b { display: block; color: var(--tension); font-size: 12px; }
+.ladder.big b { font-size: 15px; }
+.ladder.big em { font-style: normal; font-family: var(--mono); font-size: 12px; font-weight: 700; }
+@media (max-width: 520px) { .ladder.big { flex-wrap: wrap; } .ladder.big span { flex: 1 0 18%; } }
+.answers { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.acard { background: var(--surface-2); border-radius: 8px; border-top: 4px solid var(--pc); padding: 10px 12px; min-width: 0; }
+.acard-h { display: flex; justify-content: space-between; gap: 8px; font-weight: 700; color: var(--pc); margin-bottom: 6px; }
+.acard-h .v { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+.acard ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.acard li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 14px; }
+.acard .g { overflow-wrap: anywhere; font-weight: 600; }
+.acard .g small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; }
+.res { font-family: var(--mono); font-size: 12px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.res.pending { color: var(--muted); border: 1px dashed var(--line); }
+.res.hit { background: color-mix(in srgb, var(--hit) 16%, transparent); color: var(--hit); }
+.res.safe, .res.ext, .res.none { background: color-mix(in srgb, var(--miss) 16%, transparent); color: var(--ink); }
+.res.tension { background: color-mix(in srgb, var(--tension) 15%, transparent); color: var(--tension); }
+.res.dup { color: var(--muted); border: 1px solid var(--line); }
+.slot .end { flex-wrap: wrap; justify-content: flex-end; padding-block: 6px; white-space: normal; }
+.slot.open .rk { color: var(--ink); }
+.slot .nobody { font-style: italic; }
+details.more summary { cursor: pointer; font-weight: 600; }
+ol.rest { margin: 10px 0 0; padding-left: 2.6em; display: grid; gap: 3px; font-size: 14px; font-variant-numeric: tabular-nums; }
+ol.rest li span { font-weight: 600; margin-right: 8px; }
+ol.rest li small { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+ol.rest li.t span { color: var(--tension); }
+
+/* deck picker */
+.deck-block { border-top: 1px solid var(--line); padding-top: 14px; }
+.deck-h { font-family: var(--display); font-weight: 800; font-size: 20px; text-transform: uppercase; line-height: 1; }
+.pickrow { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; align-items: start; }
+@media (max-width: 520px) { .pickrow { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+.pick-label { font-size: 13px; color: var(--muted); padding-top: 7px; }
+.picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13.5px; font-weight: 600; color: var(--muted); }
+.pick[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.catgroup { display: flex; flex-direction: column; gap: 8px; }
+.catgroup + .catgroup { margin-top: 6px; }
+.catgroup-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.grp-btns { margin-left: auto; display: flex; gap: 12px; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+
+/* spelling suggestions, timer, perfect answer */
+.entry-row .sugg { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.entry-row .sugg:empty { display: none; }
+.entry-row.single { grid-template-columns: minmax(0, 1fr); }
+.entry-row.single .sugg { grid-column: 1; }
+.seg { flex-wrap: wrap; }
+.timer { display: flex; align-items: center; gap: 12px; }
+.timer .secs { font-family: var(--display); font-weight: 900; font-size: 36px; line-height: 1; min-width: 2.2ch; color: var(--pc); font-variant-numeric: tabular-nums; }
+.timer .bar { flex: 1; height: 8px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.timer .bar span { display: block; height: 100%; background: var(--pc); transition: width .2s linear; }
+.timer.urgent .secs { color: var(--tension); animation: pulse 1s ease-in-out infinite; }
+.timer.urgent .bar span { background: var(--tension); }
+@keyframes pulse { 50% { transform: scale(1.12); } }
+.perfect-note { flex-basis: 100%; text-align: right; font-weight: 700; color: var(--tension); font-size: 12.5px; }
+.acard li.perfect .g { font-weight: 500; font-size: 13px; color: var(--muted); }
+
+/* twists + hard mode */
+.badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); letter-spacing: 0.06em; font-weight: 700; }
+.badge.hard { background: var(--tension); color: var(--surface); }
+.hardpanel.on { border-color: var(--tension); box-shadow: inset 4px 0 0 var(--tension); }
+.hardbtn { border: 2px solid var(--tension); background: transparent; color: var(--tension); border-radius: 999px; padding: 10px 18px; font-weight: 800; font-family: var(--display); font-size: 18px; text-transform: uppercase; letter-spacing: 0.04em; }
+.hardbtn[aria-pressed="true"] { background: var(--tension); color: var(--surface); }
+
+/* on/off switches on the setup page */
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border-radius: 8px; background: var(--surface-2); border: 1px solid transparent; }
+.toggle-row.on { border-color: var(--accent); }
+.toggle-row.hard.on { border-color: var(--tension); }
+.toggle-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.toggle-text b { font-family: var(--display); font-weight: 800; font-size: 20px; text-transform: uppercase; line-height: 1.1; }
+.switch { flex: none; display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px; }
+.switch .knob { width: 46px; height: 26px; border-radius: 999px; background: var(--line); position: relative; transition: background .15s ease; }
+.switch .knob::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s ease; }
+.switch[aria-checked="true"] .knob { background: var(--accent); }
+.toggle-row.hard .switch[aria-checked="true"] .knob { background: var(--tension); }
+.switch[aria-checked="true"] .knob::after { transform: translateX(20px); }
+.switch-label { font-weight: 700; font-size: 13px; min-width: 2.2em; text-align: left; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">Geo <span>Tension</span></h1>
+    <p class="tag">Write your answers in secret. Deep places score big, the top three cost you, near misses hurt.</p>
+  </header>
+  <div class="layout">
+    <main id="main" class="stack"></main>
+    <aside id="side" class="side"></aside>
+  </div>
+</div>
+
+<script>
+/* ---------- data ----------
+   list: full ranking, #1 first: [name, figure, aliases]
+   tension: ranks (above 10) that are tension answers */
+const BUILTIN = [
+  { id: "nacap", title: "North American capitals", by: "by city population",
+    prompt: "National capitals of North America, Central America and the Caribbean, ranked by population within city limits.",
+    source: "City-proper estimates (2021–2024), Wikipedia list of North American cities by population. Figures marked ≈ for the smaller capitals are approximate.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Mexico City", "9.21 M", ["ciudad de mexico", "cdmx", "mexico"]],
+      ["Havana", "2.14 M", ["la habana", "habana", "cuba"]],
+      ["Guatemala City", "1.22 M", ["guatemala", "ciudad de guatemala"]],
+      ["Port-au-Prince", "1.20 M", ["port au prince", "haiti"]],
+      ["Ottawa", "1.15 M", ["canada"]],
+      ["Tegucigalpa", "1.13 M", ["honduras"]],
+      ["Panama City", "1.09 M", ["panama", "ciudad de panama"]],
+      ["Managua", "1.05 M", ["nicaragua"]],
+      ["Santo Domingo", "1.03 M", ["dominican republic"]],
+      ["Washington, D.C.", "0.67 M", ["washington", "dc", "washington dc", "usa", "united states"]],
+      ["Kingston", "0.60 M", ["jamaica"]],
+      ["San José", "≈ 350,000", ["costa rica"]],
+      ["Nassau", "≈ 300,000", ["bahamas"]],
+      ["San Salvador", "≈ 240,000", ["el salvador"]],
+      ["Bridgetown", "≈ 110,000", ["barbados"]],
+      ["Port of Spain", "≈ 37,000", ["trinidad", "trinidad and tobago"]],
+      ["Belmopan", "≈ 25,000", ["belize"]],
+      ["St. John's", "≈ 22,000", ["saint johns", "antigua", "antigua and barbuda"]],
+      ["Castries", "≈ 20,000", ["saint lucia", "st lucia"]],
+      ["Roseau", "≈ 15,000", ["dominica"]],
+      ["Basseterre", "≈ 13,000", ["saint kitts", "st kitts", "saint kitts and nevis"]],
+      ["Kingstown", "≈ 13,000", ["saint vincent", "st vincent", "saint vincent and the grenadines"]],
+      ["St. George's", "≈ 7,500", ["saint georges", "grenada"]]
+    ]
+  },
+  { id: "pop", title: "Most populous countries", by: "by population, 2025",
+    prompt: "Countries of the world ranked by number of inhabitants in 2025.",
+    source: "UN World Population Prospects 2024, mid-2025 estimates.",
+    tension: [11, 12, 13, 14, 15],
+    list: [
+      ["India", "1,464 M", []], ["China", "1,416 M", ["prc"]],
+      ["United States", "347 M", ["usa", "us", "america", "united states of america"]],
+      ["Indonesia", "286 M", []], ["Pakistan", "255 M", []], ["Nigeria", "238 M", []],
+      ["Brazil", "213 M", ["brasil"]], ["Bangladesh", "176 M", []],
+      ["Russia", "144 M", ["russian federation"]], ["Ethiopia", "135 M", []],
+      ["Mexico", "132 M", []], ["Japan", "123 M", []], ["Egypt", "118 M", []],
+      ["Philippines", "117 M", ["phillipines"]],
+      ["DR Congo", "113 M", ["drc", "congo", "democratic republic of the congo", "congo kinshasa"]],
+      ["Vietnam", "102 M", ["viet nam"]], ["Iran", "92 M", []], ["Turkey", "88 M", ["turkiye"]],
+      ["Germany", "84 M", ["deutschland"]], ["Thailand", "72 M", []], ["Tanzania", "71 M", []],
+      ["United Kingdom", "70 M", ["uk", "britain", "great britain", "england"]],
+      ["France", "67 M", []], ["South Africa", "65 M", []], ["Italy", "59 M", ["italia"]]
+    ]
+  },
+  { id: "area", title: "Largest countries", by: "by total area",
+    prompt: "Countries of the world ranked by total area, land and water.",
+    source: "CIA World Factbook, total area.",
+    tension: [11, 12, 13, 14, 15],
+    list: [
+      ["Russia", "17,098,242 km²", ["russian federation"]], ["Canada", "9,984,670 km²", []],
+      ["United States", "9,833,517 km²", ["usa", "us", "america", "united states of america"]],
+      ["China", "9,596,960 km²", ["prc"]], ["Brazil", "8,515,770 km²", ["brasil"]],
+      ["Australia", "7,741,220 km²", []], ["India", "3,287,263 km²", []],
+      ["Argentina", "2,780,400 km²", []], ["Kazakhstan", "2,724,900 km²", []], ["Algeria", "2,381,740 km²", []],
+      ["DR Congo", "2,344,858 km²", ["drc", "congo", "democratic republic of the congo"]],
+      ["Saudi Arabia", "2,149,690 km²", []], ["Mexico", "1,964,375 km²", []],
+      ["Indonesia", "1,904,569 km²", []], ["Sudan", "1,861,484 km²", []],
+      ["Libya", "1,759,540 km²", []], ["Iran", "1,648,195 km²", []], ["Mongolia", "1,564,116 km²", []],
+      ["Peru", "1,285,216 km²", []], ["Chad", "1,284,000 km²", []], ["Niger", "1,267,000 km²", []],
+      ["Angola", "1,246,700 km²", []], ["Mali", "1,240,192 km²", []],
+      ["South Africa", "1,219,090 km²", []], ["Colombia", "1,138,910 km²", []]
+    ]
+  },
+  { id: "rivers", title: "Longest rivers", by: "by length",
+    prompt: "Rivers of the world ranked by length of the full river system.",
+    source: "Wikipedia list of river systems by length.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Nile", "6,650 km", []], ["Amazon", "6,400 km", ["amazonas"]], ["Yangtze", "6,300 km", ["chang jiang", "yangtse"]],
+      ["Mississippi–Missouri", "6,275 km", ["mississippi", "missouri", "mississippi missouri"]],
+      ["Yenisei", "5,539 km", ["yenisey", "jenisej"]], ["Yellow River", "5,464 km", ["yellow", "huang he", "huanghe"]],
+      ["Ob–Irtysh", "5,410 km", ["ob", "irtysh", "ob irtysh"]], ["Paraná", "4,880 km", ["rio de la plata", "plata"]],
+      ["Congo", "4,700 km", ["zaire"]], ["Amur", "4,444 km", ["heilong", "heilongjiang"]],
+      ["Lena", "4,400 km", []], ["Mekong", "4,350 km", []], ["Mackenzie", "4,241 km", []], ["Niger", "4,200 km", []],
+      ["Brahmaputra", "3,969 km", ["yarlung tsangpo"]], ["Murray–Darling", "3,672 km", ["murray", "darling", "murray darling"]],
+      ["Tocantins–Araguaia", "3,650 km", ["tocantins", "araguaia"]], ["Volga", "3,645 km", []],
+      ["Euphrates", "3,596 km", ["shatt al arab"]], ["Madeira", "3,380 km", []], ["Purús", "3,211 km", []],
+      ["Yukon", "3,185 km", []], ["Indus", "3,180 km", []], ["São Francisco", "3,180 km", ["sao francisco"]],
+      ["Syr Darya", "3,078 km", []], ["Salween", "3,060 km", ["nu jiang"]],
+      ["Saint Lawrence", "3,058 km", ["st lawrence"]], ["Rio Grande", "3,057 km", ["rio bravo"]],
+      ["Lower Tunguska", "2,989 km", []], ["Colorado", "2,945 km", []]
+    ]
+  },
+  { id: "peaks", title: "Highest mountains", by: "by elevation",
+    prompt: "Mountains of the world ranked by height above sea level.",
+    source: "Elevations as listed on Wikipedia's list of highest mountains on Earth.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Everest", "8,849 m", ["sagarmatha", "chomolungma", "qomolangma"]], ["K2", "8,611 m", ["godwin austen", "chhogori"]],
+      ["Kangchenjunga", "8,586 m", ["kanchenjunga", "kangchendzonga"]], ["Lhotse", "8,516 m", []],
+      ["Makalu", "8,485 m", []], ["Cho Oyu", "8,188 m", []], ["Dhaulagiri", "8,167 m", []],
+      ["Manaslu", "8,163 m", []], ["Nanga Parbat", "8,126 m", []], ["Annapurna", "8,091 m", ["annapurna i"]],
+      ["Gasherbrum I", "8,080 m", ["gasherbrum", "gasherbrum 1", "hidden peak"]], ["Broad Peak", "8,051 m", ["broad"]],
+      ["Gasherbrum II", "8,035 m", ["gasherbrum 2"]], ["Shishapangma", "8,027 m", ["shisha pangma", "xixabangma"]],
+      ["Gyachung Kang", "7,952 m", []], ["Gasherbrum III", "7,946 m", ["gasherbrum 3"]],
+      ["Annapurna II", "7,937 m", ["annapurna 2"]], ["Gasherbrum IV", "7,932 m", ["gasherbrum 4"]],
+      ["Himalchuli", "7,893 m", []], ["Distaghil Sar", "7,885 m", []]
+    ]
+  },
+  { id: "lakes", title: "Largest lakes", by: "by surface area",
+    prompt: "Lakes of the world ranked by surface area. The Caspian Sea counts as a lake.",
+    source: "Wikipedia list of lakes by area.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Caspian Sea", "389,000 km²", ["caspian"]], ["Lake Superior", "82,100 km²", []], ["Lake Victoria", "59,940 km²", ["nalubaale"]],
+      ["Lake Huron", "59,570 km²", []], ["Lake Michigan", "57,800 km²", []], ["Lake Tanganyika", "32,900 km²", []],
+      ["Lake Baikal", "31,722 km²", ["baykal"]], ["Great Bear Lake", "31,153 km²", []],
+      ["Lake Malawi", "29,600 km²", ["nyasa", "lake nyasa", "niassa"]], ["Great Slave Lake", "27,200 km²", []],
+      ["Lake Erie", "25,667 km²", []], ["Lake Winnipeg", "24,514 km²", []], ["Lake Ontario", "19,011 km²", []],
+      ["Lake Ladoga", "17,700 km²", []], ["Lake Balkhash", "16,400 km²", ["balkash"]], ["Lake Vostok", "12,500 km²", []],
+      ["Lake Onega", "9,700 km²", []], ["Lake Titicaca", "8,372 km²", []], ["Lake Nicaragua", "8,264 km²", ["cocibolca"]],
+      ["Lake Athabasca", "7,850 km²", []], ["Reindeer Lake", "6,650 km²", []], ["Lake Turkana", "6,405 km²", []],
+      ["Issyk-Kul", "6,236 km²", ["issyk kul", "ysyk kol"]], ["Vänern", "5,650 km²", ["vanern"]], ["Lake Rukwa", "5,615 km²", []]
+    ]
+  },
+  { id: "islands", title: "Largest islands", by: "by area",
+    prompt: "Islands of the world ranked by area. Australia is a continent, so it doesn't count.",
+    source: "Wikipedia list of islands by area.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Greenland", "2,130,800 km²", ["kalaallit nunaat", "gronland"]], ["New Guinea", "785,753 km²", ["papua"]],
+      ["Borneo", "743,330 km²", ["kalimantan"]], ["Madagascar", "587,041 km²", []], ["Baffin Island", "507,451 km²", []],
+      ["Sumatra", "443,066 km²", ["sumatera"]], ["Honshu", "225,800 km²", []],
+      ["Victoria Island", "217,291 km²", []], ["Great Britain", "209,331 km²", ["britain", "gb"]], ["Ellesmere Island", "196,236 km²", []],
+      ["Sulawesi", "180,681 km²", ["celebes"]], ["South Island", "145,836 km²", ["te waipounamu"]], ["Java", "138,794 km²", ["jawa"]],
+      ["North Island", "111,583 km²", ["te ika a maui"]], ["Luzon", "109,965 km²", []], ["Newfoundland", "108,860 km²", []],
+      ["Cuba", "104,556 km²", []], ["Iceland", "101,826 km²", []], ["Mindanao", "97,530 km²", []],
+      ["Ireland", "84,421 km²", ["eire"]], ["Hokkaido", "78,073 km²", []], ["Hispaniola", "73,929 km²", []],
+      ["Sakhalin", "72,492 km²", []], ["Banks Island", "70,028 km²", []], ["Sri Lanka", "65,268 km²", ["ceylon"]],
+      ["Tasmania", "64,519 km²", []]
+    ]
+  },
+  { id: "eu", title: "Most populous EU countries", by: "by population, 2025",
+    prompt: "Member states of the European Union ranked by population on 1 January 2025.",
+    source: "Eurostat, population on 1 January 2025.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Germany", "83.6 M", ["deutschland"]], ["France", "68.6 M", []], ["Italy", "58.9 M", ["italia"]],
+      ["Spain", "49.1 M", ["espana"]], ["Poland", "36.5 M", ["polska"]], ["Romania", "19.0 M", []],
+      ["Netherlands", "18.0 M", ["holland", "nederland"]], ["Belgium", "11.9 M", []],
+      ["Czechia", "10.9 M", ["czech republic", "czech"]], ["Portugal", "10.7 M", []],
+      ["Sweden", "10.6 M", ["sverige"]], ["Greece", "10.4 M", ["hellas"]], ["Hungary", "9.5 M", []], ["Austria", "9.2 M", ["osterreich"]],
+      ["Bulgaria", "6.4 M", []], ["Denmark", "6.0 M", ["danmark"]], ["Finland", "5.6 M", ["suomi"]], ["Ireland", "5.4 M", ["eire"]],
+      ["Slovakia", "5.4 M", []], ["Croatia", "3.9 M", ["hrvatska"]], ["Lithuania", "2.9 M", []], ["Slovenia", "2.1 M", []],
+      ["Latvia", "1.9 M", []], ["Estonia", "1.4 M", []], ["Cyprus", "0.98 M", []], ["Luxembourg", "0.68 M", []], ["Malta", "0.57 M", []]
+    ]
+  },
+  { id: "states", title: "Largest US states", by: "by total area",
+    prompt: "US states ranked by total area, land and water.",
+    source: "US Census Bureau, total area.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Alaska", "1,723,337 km²", []], ["Texas", "695,662 km²", []], ["California", "423,967 km²", []],
+      ["Montana", "380,831 km²", []], ["New Mexico", "314,917 km²", []], ["Arizona", "295,234 km²", []],
+      ["Nevada", "286,380 km²", []], ["Colorado", "269,601 km²", []], ["Oregon", "254,799 km²", []], ["Wyoming", "253,335 km²", []],
+      ["Michigan", "250,487 km²", []], ["Minnesota", "225,163 km²", []], ["Utah", "219,882 km²", []], ["Idaho", "216,443 km²", []],
+      ["Kansas", "213,100 km²", []], ["Nebraska", "200,330 km²", []], ["South Dakota", "199,729 km²", []],
+      ["Washington", "184,661 km²", ["washington state"]], ["North Dakota", "183,108 km²", []], ["Oklahoma", "181,037 km²", []],
+      ["Missouri", "180,540 km²", []], ["Florida", "170,312 km²", []], ["Wisconsin", "169,635 km²", []],
+      ["Georgia", "153,910 km²", []], ["Illinois", "149,995 km²", []]
+    ]
+  },
+  { id: "africa", title: "Largest African countries", by: "by total area",
+    prompt: "Countries in Africa ranked by total area.",
+    source: "CIA World Factbook, total area.",
+    tension: [11, 12, 13, 14],
+    list: [
+      ["Algeria", "2,381,741 km²", []], ["DR Congo", "2,344,858 km²", ["drc", "congo", "democratic republic of the congo", "congo kinshasa"]],
+      ["Sudan", "1,861,484 km²", []], ["Libya", "1,759,540 km²", []], ["Chad", "1,284,000 km²", []],
+      ["Niger", "1,267,000 km²", []], ["Angola", "1,246,700 km²", []], ["Mali", "1,240,192 km²", []],
+      ["South Africa", "1,219,090 km²", ["rsa"]], ["Ethiopia", "1,104,300 km²", []],
+      ["Mauritania", "1,030,700 km²", []], ["Egypt", "1,001,450 km²", []], ["Tanzania", "947,303 km²", []], ["Nigeria", "923,768 km²", []],
+      ["Namibia", "824,292 km²", []], ["Mozambique", "799,380 km²", []], ["Zambia", "752,618 km²", []],
+      ["South Sudan", "644,329 km²", []], ["Somalia", "637,657 km²", []], ["Central African Republic", "622,984 km²", ["car"]],
+      ["Madagascar", "587,041 km²", []], ["Botswana", "581,730 km²", []], ["Kenya", "580,367 km²", []],
+      ["Cameroon", "475,440 km²", []], ["Morocco", "446,550 km²", []]
+    ]
+  }
+];
+
+
+/* ---------- continent lists ----------
+   One row per sovereign state: k continent, a area km², p population 2025, g GDP 2025 ($ bn),
+   pc GDP per capita 2025 ($), t international tourist arrivals 2023, cap [capital, city population, extra spellings], al aliases */
+const COUNTRIES = {"Algeria":{"k":"af","a":2381741.0,"p":47435312,"g":285.724,"pc":6047,"t":2196000,"cap":["Algiers",3915811,[]]},"Angola":{"k":"af","a":1246700.0,"p":39040039,"g":141.728,"pc":3614,"t":134000,"cap":["Luanda",2571861,[]]},"Benin":{"k":"af","a":114763.0,"p":14814460,"g":24.382,"pc":1634,"cap":["Porto-Novo",264320,[]]},"Botswana":{"k":"af","a":582000.0,"p":2562122,"g":19.533,"pc":7662,"cap":["Gaborone",273602,[]]},"Burkina Faso":{"k":"af","a":274200.0,"p":24074580,"g":27.14,"pc":1126,"cap":["Ouagadougou",2453496,[]]},"Burundi":{"k":"af","a":27834.0,"p":14390003,"g":6.918,"pc":478,"cap":["Gitega",135467,[]]},"Cape Verde":{"k":"af","a":4033.0,"p":527326,"g":3.081,"pc":5995,"t":962000,"cap":["Praia",159050,[]],"al":["cabo verde"]},"Cameroon":{"k":"af","a":475650.0,"p":29879337,"g":59.282,"pc":1984,"cap":["Yaoundé",2765568,["yaounde"]]},"Central African Republic":{"k":"af","a":622984.0,"p":5513282,"g":3.192,"pc":579,"cap":["Bangui",889231,[]],"al":["car"]},"Chad":{"k":"af","a":1284000.0,"p":21003705,"g":22.092,"pc":1165,"cap":["N'Djamena",916000,[]]},"Comoros":{"k":"af","a":1861.0,"p":882847,"g":1.609,"pc":1769,"cap":["Moroni",111326,[]]},"DR Congo":{"k":"af","a":2344858.0,"p":112832473,"g":92.833,"pc":871,"cap":["Kinshasa",12691000,[]],"al":["drc","congo","democratic republic of the congo","congo kinshasa","zaire"]},"Republic of the Congo":{"k":"af","a":342000.0,"p":6484437,"g":15.592,"pc":2404,"cap":["Brazzaville",1696392,[]],"al":["congo brazzaville","congo republic","republic of congo"]},"Djibouti":{"k":"af","a":23200.0,"p":1184076,"g":4.378,"pc":4145,"cap":["Djibouti City",604013,["djibouti"]]},"Egypt":{"k":"af","a":1001450.0,"p":118365995,"g":364.64,"pc":3379,"t":14905000,"cap":["Cairo",10107125,[]]},"Equatorial Guinea":{"k":"af","a":28051.0,"p":1938431,"g":12.484,"pc":7628,"cap":["Malabo",297000,[]]},"Eritrea":{"k":"af","a":117600.0,"p":3607003,"cap":["Asmara",963000,[]]},"Eswatini":{"k":"af","a":17363.0,"p":1256174,"g":5.166,"pc":4442,"cap":["Mbabane",94874,[]],"al":["swaziland"]},"Ethiopia":{"k":"af","a":1104300.0,"p":135472051,"g":109.109,"pc":987,"t":1078000,"cap":["Addis Ababa",3040740,[]]},"Gabon":{"k":"af","a":267668.0,"p":2593130,"g":21.624,"pc":9376,"cap":["Libreville",703904,[]]},"Gambia":{"k":"af","a":11295.0,"p":2822093,"g":2.584,"pc":904,"cap":["Banjul",31301,[]],"al":["the gambia"]},"Ghana":{"k":"af","a":238537.0,"p":35064272,"g":114.708,"pc":3271,"cap":["Accra",2388000,[]]},"Guinea":{"k":"af","a":245857.0,"p":15099727,"g":27.215,"pc":1722,"cap":["Conakry",1660973,[]]},"Guinea-Bissau":{"k":"af","a":36125.0,"p":2249515,"g":2.648,"pc":1311,"cap":["Bissau",492004,[]],"al":["guinea bissau"]},"Côte d'Ivoire":{"k":"af","a":322462.0,"p":32711547,"g":98.885,"pc":3006,"cap":["Yamoussoukro",361893,[]],"al":["ivory coast","cote divoire"]},"Kenya":{"k":"af","a":580367.0,"p":57532493,"g":136.455,"pc":2558,"cap":["Nairobi",4397073,[]]},"Lesotho":{"k":"af","a":30355.0,"p":2363325,"g":2.854,"pc":1206,"cap":["Maseru",330760,[]]},"Liberia":{"k":"af","a":111369.0,"p":5731206,"g":5.216,"pc":910,"cap":["Monrovia",1010970,[]]},"Libya":{"k":"af","a":1759540.0,"p":7458555,"g":44.732,"pc":5999,"cap":["Tripoli",1170000,[]]},"Madagascar":{"k":"af","a":587041.0,"p":32740678,"g":19.556,"pc":622,"t":260000,"cap":["Antananarivo",1275207,[]]},"Malawi":{"k":"af","a":118484.0,"p":22216120,"g":15.047,"pc":625,"cap":["Lilongwe",989318,[]]},"Mali":{"k":"af","a":1240192.0,"p":25198821,"g":30.05,"pc":1190,"cap":["Bamako",1809106,[]]},"Mauritania":{"k":"af","a":1030700.0,"p":5315065,"g":12.289,"pc":2655,"cap":["Nouakchott",1195600,[]]},"Mauritius":{"k":"af","a":2096.0,"p":1268280,"g":16.126,"pc":12977,"t":1295000,"cap":["Port Louis",147066,[]]},"Morocco":{"k":"af","a":446550.0,"p":38430770,"g":182.587,"pc":4842,"t":14525000,"cap":["Rabat",577827,[]]},"Mozambique":{"k":"af","a":799380.0,"p":35631653,"g":22.338,"pc":623,"cap":["Maputo",1124988,[]]},"Namibia":{"k":"af","a":824292.0,"p":3092816,"g":14.826,"pc":4862,"t":348000,"cap":["Windhoek",431000,[]]},"Niger":{"k":"af","a":1267000.0,"p":27917831,"g":21.836,"pc":750,"cap":["Niamey",1334984,[]]},"Nigeria":{"k":"af","a":923768.0,"p":237527782,"g":290.491,"pc":1223,"cap":["Abuja",1235880,[]]},"Rwanda":{"k":"af","a":26338.0,"p":14569341,"g":15.973,"pc":1128,"t":564000,"cap":["Kigali",1132686,[]]},"São Tomé and Príncipe":{"k":"af","a":964.0,"p":240254,"g":0.981,"pc":4085,"cap":["São Tomé",71868,[]],"al":["sao tome","sao tome and principe"]},"Senegal":{"k":"af","a":196712.0,"p":18931966,"g":37.116,"pc":1936,"cap":["Dakar",1438725,[]]},"Seychelles":{"k":"af","a":457.0,"p":132779,"g":2.318,"pc":18479,"t":351000,"cap":["Victoria",26450,[]]},"Sierra Leone":{"k":"af","a":72300.0,"p":8819794,"g":7.71,"pc":874,"t":51000,"cap":["Freetown",1055964,[]]},"Somalia":{"k":"af","a":637657.0,"p":19654739,"g":12.956,"pc":764,"cap":["Mogadishu",2388000,[]]},"South Africa":{"k":"af","a":1219090.0,"p":64747319,"g":427.141,"pc":6769,"t":8483000,"cap":["Pretoria",2921488,[]]},"South Sudan":{"k":"af","a":644329.0,"p":12188788,"g":5.733,"pc":470,"cap":["Juba",525953,[]]},"Sudan":{"k":"af","a":1878000.0,"p":51662147,"g":39.718,"pc":788,"cap":["Khartoum",2682431,[]]},"Tanzania":{"k":"af","a":947303.0,"p":70545865,"g":87.344,"pc":1292,"t":1805000,"cap":["Dodoma",410956,[]]},"Togo":{"k":"af","a":56785.0,"p":9721608,"g":11.899,"pc":1217,"cap":["Lomé",837437,["lome"]]},"Tunisia":{"k":"af","a":163610.0,"p":12348573,"g":57.589,"pc":4664,"t":9371000,"cap":["Tunis",638845,[]]},"Uganda":{"k":"af","a":241550.0,"p":51384894,"g":66.014,"pc":1375,"t":1300000,"cap":["Kampala",1680600,[]]},"Zambia":{"k":"af","a":752612.0,"p":21913874,"g":28.88,"pc":1318,"t":801000,"cap":["Lusaka",2731696,[]]},"Zimbabwe":{"k":"af","a":390757.0,"p":16950795,"g":53.474,"pc":3080,"t":1603000,"cap":["Harare",2123132,[]]},"Afghanistan":{"k":"as","a":652864.0,"p":43844111,"g":19.662,"pc":448,"cap":["Kabul",4601789,[]]},"Armenia":{"k":"as","a":29743.0,"p":2952365,"g":29.243,"pc":9521,"t":2317000,"cap":["Yerevan",1096100,[]]},"Azerbaijan":{"k":"as","a":86600.0,"p":10397713,"g":75.938,"pc":7322,"t":1403000,"cap":["Baku",2303100,[]]},"Bahrain":{"k":"as","a":778.0,"p":1643332,"g":47.538,"pc":29344,"t":5556000,"cap":["Manama",200000,[]]},"Bangladesh":{"k":"as","a":148460.0,"p":175686899,"g":457.904,"pc":2636,"cap":["Dhaka",8906039,[]]},"Bhutan":{"k":"as","a":38394.0,"p":796682,"g":3.474,"pc":4394,"cap":["Thimphu",114551,[]]},"Brunei":{"k":"as","a":5765.0,"p":466330,"g":15.942,"pc":34678,"t":134000,"cap":["Bandar Seri Begawan",100700,[]],"al":["brunei darussalam"]},"Cambodia":{"k":"as","a":181035.0,"p":17847982,"g":49.288,"pc":2762,"t":5453000,"cap":["Phnom Penh",2281951,[]]},"China":{"k":"as","a":9596960.0,"p":1416096094,"g":19626.247,"pc":13968,"t":35500000,"cap":["Beijing",21858000,["peking"]]},"Georgia":{"k":"as","a":69700.0,"p":3806671,"g":38.216,"pc":10346,"t":4669000,"cap":["Tbilisi",1201769,[]]},"India":{"k":"as","a":3287263.0,"p":1463865525,"g":3916.312,"pc":2675,"t":32209000,"cap":["New Delhi",249998,[]]},"Indonesia":{"k":"as","a":1904569.0,"p":285721236,"g":1445.642,"pc":5082,"t":11680000,"cap":["Jakarta",10562088,[]]},"Iran":{"k":"as","a":1648195.0,"p":92417681,"g":371.196,"pc":4264,"t":5868000,"cap":["Tehran",8693706,[]],"al":["persia"]},"Iraq":{"k":"as","a":438317.0,"p":47020774,"g":264.167,"pc":5803,"cap":["Baghdad",7682136,[]]},"Israel":{"k":"as","a":21937.0,"p":9517181,"g":610.778,"pc":60335,"t":3010000,"cap":["Jerusalem",936425,[]]},"Japan":{"k":"as","a":377915.0,"p":123103479,"g":4435.163,"pc":35973,"t":25066000,"cap":["Tokyo",14094034,[]]},"Jordan":{"k":"as","a":89318.0,"p":11520684,"g":61.692,"pc":5355,"t":5345000,"cap":["Amman",4061150,[]]},"Kazakhstan":{"k":"as","a":2724910.0,"p":20843754,"g":302.746,"pc":14855,"cap":["Astana",1511807,["nur sultan"]]},"Kuwait":{"k":"as","a":17818.0,"p":5026078,"g":157.835,"pc":30877,"cap":["Kuwait City",55159,["kuwait"]]},"Kyrgyzstan":{"k":"as","a":199949.0,"p":7295034,"g":21.567,"pc":2984,"cap":["Bishkek",1074075,[]],"al":["kyrgyz republic"]},"Laos":{"k":"as","a":236800.0,"p":7873046,"g":17.822,"pc":2288,"cap":["Vientiane",927724,[]],"al":["lao"]},"Lebanon":{"k":"as","a":10452.0,"p":5849421,"g":34.497,"pc":6443,"t":1666000,"cap":["Beirut",361366,[]]},"Malaysia":{"k":"as","a":330621.0,"p":35977838,"g":472.193,"pc":13949,"t":20142000,"cap":["Kuala Lumpur",1782500,[]]},"Maldives":{"k":"as","a":300.0,"p":529676,"g":7.665,"pc":18658,"t":1879000,"cap":["Malé",211908,["male"]]},"Mongolia":{"k":"as","a":1564116.0,"p":3517100,"g":25.37,"pc":7079,"t":594000,"cap":["Ulaanbaatar",1466125,["ulan bator"]]},"Myanmar":{"k":"as","a":676578.0,"p":54850648,"g":82.4,"pc":1502,"t":1285000,"cap":["Naypyidaw",1160242,["nay pyi taw","naypyitaw"]],"al":["burma"]},"Nepal":{"k":"as","a":147181.0,"p":29618118,"g":44.81,"pc":1512,"t":1015000,"cap":["Kathmandu",845767,[]]},"North Korea":{"k":"as","a":120538.0,"p":26571036,"cap":["Pyongyang",2870000,[]],"al":["dprk"]},"Oman":{"k":"as","a":309500.0,"p":5494691,"g":106.127,"pc":19996,"t":2849000,"cap":["Muscat",1294101,[]]},"Pakistan":{"k":"as","a":882363.0,"p":255219554,"g":407.786,"pc":1696,"t":2215000,"cap":["Islamabad",1014825,[]]},"Palestine":{"k":"as","a":6020.0,"p":5589623,"g":17.167,"pc":3171,"t":483000,"cap":["Ramallah",38998,[]],"al":["state of palestine","west bank and gaza"]},"Philippines":{"k":"as","a":300000.0,"p":116786962,"g":487.161,"pc":4270,"t":5003000,"cap":["Manila",1846513,[]]},"Qatar":{"k":"as","a":11586.0,"p":3115889,"g":221.229,"pc":69680,"t":4054000,"cap":["Doha",1186023,[]]},"Saudi Arabia":{"k":"as","a":2149690.0,"p":34566328,"g":1276.943,"pc":35464,"t":27424000,"cap":["Riyadh",7676654,[]]},"Singapore":{"k":"as","a":745.0,"p":5870750,"g":603.87,"pc":99365,"t":13600000,"cap":["Singapore",5917600,[]]},"South Korea":{"k":"as","a":100432.0,"p":51667029,"g":1872.375,"pc":36227,"t":11032000,"cap":["Seoul",9508451,[]],"al":["korea","republic of korea"]},"Sri Lanka":{"k":"as","a":67240.0,"p":23229470,"g":108.825,"pc":5002,"t":1487000,"cap":["Sri Jayawardenepura Kotte",107925,["kotte","sri jayawardenepura"]]},"Syria":{"k":"as","a":185180.0,"p":25620427,"t":2018000,"cap":["Damascus",2079000,[]]},"Taiwan":{"k":"as","a":35980.0,"p":23112793,"g":920.05,"pc":39489,"t":6487000,"cap":["Taipei",2608332,[]]},"Tajikistan":{"k":"as","a":144100.0,"p":10786734,"g":17.542,"pc":1693,"cap":["Dushanbe",863400,[]]},"Thailand":{"k":"as","a":513120.0,"p":71619863,"g":577.01,"pc":8057,"t":28150000,"cap":["Bangkok",8305218,[]]},"Timor-Leste":{"k":"as","a":14874.0,"p":1418517,"g":2.064,"pc":1464,"cap":["Dili",277279,[]],"al":["east timor"]},"Turkey":{"k":"as","a":783562.0,"p":87685426,"g":1597.301,"pc":18611,"t":55159000,"cap":["Ankara",5747325,[]],"al":["turkiye"]},"Turkmenistan":{"k":"as","a":488100.0,"p":7618847,"g":77.398,"pc":11587,"cap":["Ashgabat",791000,[]]},"United Arab Emirates":{"k":"as","a":83600.0,"p":11346000,"g":571.643,"pc":50232,"t":28146000,"cap":["Abu Dhabi",1010092,[]],"al":["uae","emirates"]},"Uzbekistan":{"k":"as","a":447400.0,"p":37053428,"g":147.069,"pc":3846,"t":6626000,"cap":["Tashkent",2860600,[]]},"Vietnam":{"k":"as","a":331340.0,"p":101598527,"g":494.046,"pc":4829,"t":12602000,"cap":["Hanoi",8053663,[]],"al":["viet nam"]},"Yemen":{"k":"as","a":455503.0,"p":41773878,"g":7.897,"pc":420,"cap":["Sanaa",2575347,[]]},"Albania":{"k":"eu","a":28748.0,"p":2771508,"g":30.279,"pc":11235,"t":9670000,"cap":["Tirana",557422,[]]},"Andorra":{"k":"eu","a":468.0,"p":82904,"g":4.491,"pc":50379,"t":4048000,"cap":["Andorra la Vella",22873,[]]},"Austria":{"k":"eu","a":83878.0,"p":9113574,"g":579.928,"pc":63161,"t":30910000,"cap":["Vienna",1962779,[]],"al":["osterreich"]},"Belarus":{"k":"eu","a":207600.0,"p":8997603,"g":92.766,"pc":10209,"cap":["Minsk",1996553,[]]},"Belgium":{"k":"eu","a":30528.0,"p":11758603,"g":724.917,"pc":61002,"t":9280000,"cap":["Brussels",187686,[]]},"Bosnia and Herzegovina":{"k":"eu","a":51209.0,"p":3140095,"g":32.962,"pc":9568,"t":1199000,"cap":["Sarajevo",275524,[]],"al":["bosnia"]},"Bulgaria":{"k":"eu","a":110879.0,"p":6714560,"g":131.024,"pc":20921,"t":4032000,"cap":["Sofia",1307439,[]]},"Croatia":{"k":"eu","a":56594.0,"p":3848160,"g":106.055,"pc":27376,"t":16855000,"cap":["Zagreb",769944,[]],"al":["hrvatska"]},"Cyprus":{"k":"eu","a":9251.0,"p":1370754,"g":41.019,"pc":41730,"t":3846000,"cap":["Nicosia",326739,[]]},"Czechia":{"k":"eu","a":78871.0,"p":10609239,"g":389.02,"pc":35678,"cap":["Prague",1357326,[]],"al":["czech republic","czech"]},"Denmark":{"k":"eu","a":42947.0,"p":6002507,"g":461.718,"pc":77046,"cap":["Copenhagen",638117,[]],"al":["danmark"]},"Estonia":{"k":"eu","a":45339.0,"p":1344232,"g":47.004,"pc":34325,"t":2422000,"cap":["Tallinn",438341,[]]},"Finland":{"k":"eu","a":338145.0,"p":5623329,"g":316.86,"pc":56464,"t":2561000,"cap":["Helsinki",658864,[]],"al":["suomi"]},"France":{"k":"eu","a":643801.0,"p":66650804,"g":3368.925,"pc":48930,"t":100000000,"cap":["Paris",2139907,[]]},"Germany":{"k":"eu","a":357581.0,"p":84075075,"g":5048.059,"pc":60439,"t":34801000,"cap":["Berlin",3677472,[]],"al":["deutschland"]},"Greece":{"k":"eu","a":131957.0,"p":9938844,"g":280.476,"pc":27041,"t":32735000,"cap":["Athens",637798,[]],"al":["hellas"]},"Hungary":{"k":"eu","a":93025.0,"p":9632287,"g":246.891,"pc":25826,"t":12934000,"cap":["Budapest",1706851,[]]},"Iceland":{"k":"eu","a":103000.0,"p":398266,"g":38.583,"pc":99071,"cap":["Reykjavík",133262,["reykjavik"]]},"Ireland":{"k":"eu","a":70273.0,"p":5308039,"g":718.14,"pc":130652,"t":6300000,"cap":["Dublin",592713,[]]},"Italy":{"k":"eu","a":302068.0,"p":59146260,"g":2550.111,"pc":43270,"t":57250000,"cap":["Rome",2761632,[]],"al":["italia"]},"Kosovo":{"k":"eu","a":10887.0,"p":1674125,"g":12.449,"pc":7902,"cap":["Pristina",227466,[]]},"Latvia":{"k":"eu","a":64594.0,"p":1853559,"g":48.591,"pc":26116,"t":1277000,"cap":["Riga",605802,[]]},"Liechtenstein":{"k":"eu","a":160.0,"p":40128,"g":8.991,"pc":217928,"t":114000,"cap":["Vaduz",5774,[]]},"Lithuania":{"k":"eu","a":65286.0,"p":2830144,"g":94.927,"pc":32839,"t":2405000,"cap":["Vilnius",576195,[]]},"Luxembourg":{"k":"eu","a":2586.0,"p":680453,"g":101.1,"pc":148247,"t":1063000,"cap":["Luxembourg City",136208,["luxembourg"]]},"Malta":{"k":"eu","a":315.0,"p":545405,"g":27.756,"pc":49297,"t":2976000,"cap":["Valletta",5827,[]]},"Moldova":{"k":"eu","a":33847.0,"p":2996106,"g":20.342,"pc":8542,"t":195000,"cap":["Chișinău",779300,["chisinau"]],"al":["republic of moldova"]},"Monaco":{"k":"eu","a":2.02,"p":38341,"cap":["Monaco",38350,[]]},"Montenegro":{"k":"eu","a":13888.0,"p":632729,"g":9.228,"pc":14784,"t":2447000,"cap":["Podgorica",190488,[]]},"Netherlands":{"k":"eu","a":41865.0,"p":18346819,"g":1332.24,"pc":73833,"t":20303000,"cap":["Amsterdam",905234,[]],"al":["holland","the netherlands"]},"North Macedonia":{"k":"eu","a":25713.0,"p":1813791,"g":19.142,"pc":10546,"t":734000,"cap":["Skopje",544086,[]],"al":["macedonia"]},"Norway":{"k":"eu","a":386224.0,"p":5623071,"g":530.756,"pc":94468,"cap":["Oslo",697010,[]],"al":["norge"]},"Poland":{"k":"eu","a":312685.0,"p":38140910,"g":1035.586,"pc":28374,"t":18987000,"cap":["Warsaw",1863056,[]],"al":["polska"]},"Portugal":{"k":"eu","a":92090.0,"p":10411834,"g":346.412,"pc":32166,"t":26535000,"cap":["Lisbon",509614,[]]},"Romania":{"k":"eu","a":238398.0,"p":18908650,"g":427.941,"pc":22725,"t":2101000,"cap":["Bucharest",1716983,[]]},"Russia":{"k":"eu","a":17098246.0,"p":143997393,"g":2587.938,"pc":17972,"cap":["Moscow",13274285,[]],"al":["russian federation"]},"San Marino":{"k":"eu","a":61.0,"p":33572,"g":2.251,"pc":65543,"t":109000,"cap":["City of San Marino",4061,["san marino"]]},"Serbia":{"k":"eu","a":88499.0,"p":6689039,"g":99.953,"pc":15284,"t":2134000,"cap":["Belgrade",1688667,[]]},"Slovakia":{"k":"eu","a":49035.0,"p":5474881,"g":154.442,"pc":28498,"t":1600000,"cap":["Bratislava",440948,[]],"al":["slovak republic"]},"Slovenia":{"k":"eu","a":20273.0,"p":2117072,"g":79.603,"pc":37357,"t":4658000,"cap":["Ljubljana",285604,[]]},"Spain":{"k":"eu","a":505370.0,"p":47889958,"g":1903.826,"pc":38290,"t":85169000,"cap":["Madrid",3305408,[]],"al":["espana"]},"Sweden":{"k":"eu","a":450295.0,"p":10656633,"g":668.999,"pc":62662,"t":7531000,"cap":["Stockholm",978770,[]],"al":["sverige"]},"Switzerland":{"k":"eu","a":41291.0,"p":8967407,"g":1043.544,"pc":115620,"t":11561000,"cap":["Bern",134591,[]],"al":["schweiz","suisse"]},"Ukraine":{"k":"eu","a":603550.0,"p":38980376,"g":212.927,"pc":6499,"cap":["Kyiv",2920873,["kiev"]]},"United Kingdom":{"k":"eu","a":244376.0,"p":69551332,"g":4003.022,"pc":57608,"t":37215000,"cap":["London",9002488,[]],"al":["uk","britain","great britain","england"]},"Vatican City":{"k":"eu","a":0.44,"p":501,"cap":["Vatican City",764,["vatican"]],"al":["vatican","holy see"]},"Antigua and Barbuda":{"k":"na","a":442.0,"p":94209,"g":2.273,"pc":21676,"t":282000,"cap":["St. John's",22219,["saint johns"]],"al":["antigua"]},"Bahamas":{"k":"na","a":13880.0,"p":403033,"g":16.508,"pc":40005,"t":1806000,"cap":["Nassau",274400,[]],"al":["the bahamas"]},"Barbados":{"k":"na","a":431.0,"p":282623,"g":8.017,"pc":27494,"t":637000,"cap":["Bridgetown",110000,[]]},"Belize":{"k":"na","a":22965.0,"p":422924,"g":3.327,"pc":7968,"t":465000,"cap":["Belmopan",20621,[]]},"Canada":{"k":"na","a":9984670.0,"p":40126723,"g":2319.9,"pc":55765,"t":18344000,"cap":["Ottawa",1017449,[]]},"Costa Rica":{"k":"na","a":51180.0,"p":5152950,"g":102.902,"pc":19162,"t":2751000,"cap":["San José",342188,[]]},"Cuba":{"k":"na","a":109884.0,"p":10937203,"t":2400000,"cap":["Havana",2132183,["la habana","habana"]]},"Dominica":{"k":"na","a":750.0,"p":65871,"g":0.744,"pc":9895,"t":68000,"cap":["Roseau",14725,[]]},"Dominican Republic":{"k":"na","a":48670.0,"p":11520487,"g":127.895,"pc":11749,"t":8059000,"cap":["Santo Domingo",1111838,[]],"al":["dr"]},"El Salvador":{"k":"na","a":21041.0,"p":6365503,"g":37.268,"pc":5839,"t":2479000,"cap":["San Salvador",570459,[]]},"Grenada":{"k":"na","a":345.0,"p":117303,"g":1.42,"pc":12210,"cap":["St. George's",33734,["saint georges"]]},"Guatemala":{"k":"na","a":108889.0,"p":18687881,"g":121.113,"pc":6489,"t":2021000,"cap":["Guatemala City",2934841,["guatemala"]]},"Haiti":{"k":"na","a":27750.0,"p":11906095,"g":32.102,"pc":2557,"cap":["Port-au-Prince",987310,["port au prince"]]},"Honduras":{"k":"na","a":112492.0,"p":11005850,"g":39.694,"pc":3607,"t":850000,"cap":["Tegucigalpa",1444085,[]]},"Jamaica":{"k":"na","a":10991.0,"p":2837077,"g":22.313,"pc":8106,"t":2876000,"cap":["Kingston",662491,[]]},"Mexico":{"k":"na","a":1964375.0,"p":131946900,"g":1832.641,"pc":13741,"t":41949000,"cap":["Mexico City",9209944,["ciudad de mexico","cdmx"]]},"Nicaragua":{"k":"na","a":130373.0,"p":7007502,"g":22.237,"pc":3337,"t":1087000,"cap":["Managua",1055247,[]]},"Panama":{"k":"na","a":75320.0,"p":4571189,"g":90.463,"pc":19814,"t":1874000,"cap":["Panama City",1086990,["panama"]]},"Saint Kitts and Nevis":{"k":"na","a":261.0,"p":46922,"g":1.082,"pc":21002,"t":104000,"cap":["Basseterre",14000,[]],"al":["st kitts","st kitts and nevis","saint kitts"]},"Saint Lucia":{"k":"na","a":616.0,"p":180149,"g":2.651,"pc":14603,"t":381000,"cap":["Castries",20000,[]],"al":["st lucia"]},"Saint Vincent and the Grenadines":{"k":"na","a":389.0,"p":99924,"g":1.176,"pc":10573,"t":81000,"cap":["Kingstown",12909,[]],"al":["st vincent","saint vincent","st vincent and the grenadines"]},"Trinidad and Tobago":{"k":"na","a":5127.0,"p":1511155,"g":25.932,"pc":18072,"t":309000,"cap":["Port of Spain",37074,[]],"al":["trinidad"]},"United States":{"k":"na","a":9525067.0,"p":347275807,"g":30767.075,"pc":89991,"t":66482000,"cap":["Washington, D.C.",670050,["washington","dc","washington dc"]],"al":["usa","us","america","united states of america"]},"Argentina":{"k":"sa","a":2780400.0,"p":45851378,"g":681.485,"pc":14355,"t":7286000,"cap":["Buenos Aires",3120612,[]]},"Bolivia":{"k":"sa","a":1098581.0,"p":12581843,"g":64.25,"pc":5107,"t":1009000,"cap":["Sucre",360544,["la paz"]]},"Brazil":{"k":"sa","a":8510346.0,"p":212812405,"g":2279.918,"pc":10686,"t":5908000,"cap":["Brasília",2982818,["brasilia"]],"al":["brasil"]},"Chile":{"k":"sa","a":756102.0,"p":19859921,"g":355.346,"pc":17735,"t":3731000,"cap":["Santiago",6310000,[]]},"Colombia":{"k":"sa","a":1138910.0,"p":53425635,"g":457.41,"pc":8623,"t":5631000,"cap":["Bogotá",7181469,["bogota"]]},"Ecuador":{"k":"sa","a":283561.0,"p":18289896,"g":130.321,"pc":7199,"t":1427000,"cap":["Quito",2800388,[]]},"Guyana":{"k":"sa","a":214969.0,"p":835986,"g":27.097,"pc":26994,"t":319000,"cap":["Georgetown",118363,[]]},"Paraguay":{"k":"sa","a":406752.0,"p":7013078,"g":49.358,"pc":7692,"t":864000,"cap":["Asunción",521559,["asuncion"]]},"Peru":{"k":"sa","a":1285216.0,"p":34576665,"g":341.025,"pc":9911,"t":2525000,"cap":["Lima",10151000,[]]},"Suriname":{"k":"sa","a":163820.0,"p":639850,"g":4.664,"pc":7099,"cap":["Paramaribo",240924,[]]},"Uruguay":{"k":"sa","a":176215.0,"p":3384688,"g":85.575,"pc":24549,"t":3835000,"cap":["Montevideo",1319108,[]]},"Venezuela":{"k":"sa","a":912050.0,"p":28516896,"g":99.661,"pc":3736,"cap":["Caracas",2245744,[]]},"Australia":{"k":"oc","a":7741220.0,"p":26974026,"g":1839.961,"pc":66352,"t":7187000,"cap":["Canberra",431380,[]]},"Fiji":{"k":"oc","a":18272.0,"p":933154,"g":6.041,"pc":6508,"t":930000,"cap":["Suva",93970,[]]},"Kiribati":{"k":"oc","a":811.0,"p":136488,"g":0.349,"pc":2701,"cap":["Tarawa",70480,["south tarawa"]]},"Marshall Islands":{"k":"oc","a":181.0,"p":36282,"g":0.308,"pc":8451,"cap":["Majuro",27797,[]]},"Micronesia":{"k":"oc","a":702.0,"p":113683,"g":0.502,"pc":5308,"cap":["Palikir",6647,[]],"al":["federated states of micronesia","fsm"]},"Nauru":{"k":"oc","a":21.0,"p":12025,"g":0.176,"pc":14584,"cap":["Yaren",747,[]]},"New Zealand":{"k":"oc","a":268838.0,"p":5251899,"g":258.832,"pc":48621,"cap":["Wellington",217000,[]]},"Palau":{"k":"oc","a":459.0,"p":17663,"g":0.345,"pc":19685,"t":41000,"cap":["Ngerulmud",300,[]]},"Papua New Guinea":{"k":"oc","a":462840.0,"p":10762817,"g":32.491,"pc":2538,"cap":["Port Moresby",364145,[]],"al":["png"]},"Samoa":{"k":"oc","a":2842.0,"p":219306,"g":1.288,"pc":6075,"t":169000,"cap":["Apia",41611,[]]},"Solomon Islands":{"k":"oc","a":28896.0,"p":838645,"g":1.704,"pc":2135,"t":26000,"cap":["Honiara",92344,[]]},"Tonga":{"k":"oc","a":747.0,"p":103742,"g":0.68,"pc":6858,"cap":["Nukuʻalofa",27600,["nukualofa"]]},"Tuvalu":{"k":"oc","a":26.0,"p":9492,"g":0.058,"pc":5823,"cap":["Funafuti",6320,[]]},"Vanuatu":{"k":"oc","a":12189.0,"p":335169,"g":1.316,"pc":3936,"t":77000,"cap":["Port Vila",51437,[]]}};
+const CONTINENTS = { af: "Africa", as: "Asia", eu: "Europe", na: "North America", sa: "South America", oc: "Oceania" };
+const CONT_NOTE = {
+  eu: "Russia and Cyprus count as Europe; Turkey and the Caucasus count as Asia.",
+  as: "Turkey, Georgia, Armenia, Azerbaijan and Kazakhstan count as Asia; Russia and Cyprus count as Europe.",
+  na: "North America includes Central America and the Caribbean.",
+  sa: "South America has only 12 countries, so almost all of them are on the board.",
+  oc: "Oceania has only 14 countries."
+};
+const fmtPeople = n => n >= 1e6 ? (n / 1e6).toFixed(n >= 1e8 ? 0 : n >= 1e7 ? 1 : 2) + " M" : Math.round(n).toLocaleString("en-US");
+const fmtArea = n => (n < 10 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : Math.round(n).toLocaleString("en-US")) + " km²";
+const fmtBn = n => n >= 1 ? "$" + n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 0 : 1 }) + " bn" : "$" + Math.round(n * 1000).toLocaleString("en-US") + " M";
+const METRICS = {
+  area: { label: "Area", get: r => r.a, fmt: fmtArea, big: "Largest countries", small: "Smallest countries", what: "total area",
+    source: "Total area, Wikipedia list of countries and dependencies by area." },
+  pop: { label: "Population", get: r => r.p, fmt: fmtPeople, big: "Most populous countries", small: "Least populous countries", what: "population in 2025",
+    source: "UN World Population Prospects 2024, estimates for 2025." },
+  gdp: { label: "GDP", get: r => r.g, fmt: fmtBn, big: "Biggest economies", small: "Smallest economies", what: "nominal GDP in 2025, in US dollars",
+    source: "IMF World Economic Outlook, nominal GDP for 2025 (via StatisticsTimes). Cuba, Eritrea, Monaco, North Korea, Syria and Vatican City have no IMF figure and are left out." },
+  gdppc: { label: "GDP per capita", get: r => r.pc, fmt: n => "$" + n.toLocaleString("en-US"), big: "Richest countries per person", small: "Poorest countries per person", what: "GDP per person in 2025, in US dollars",
+    source: "IMF World Economic Outlook, GDP per capita for 2025 (via StatisticsTimes). Cuba, Eritrea, Monaco, North Korea, Syria and Vatican City have no IMF figure and are left out." },
+  tour: { label: "Tourists per year", get: r => r.t, fmt: fmtPeople, big: "Most visited countries", small: "Least visited countries", what: "international tourist arrivals in 2023",
+    source: "UN Tourism arrivals for 2023 (via DataPandas and Wikipedia); Singapore, Indonesia and Cuba from their national statistics offices. Countries with no published 2023 figure are left out." },
+  cap: { label: "Capital population", get: r => r.cap && r.cap[1], fmt: fmtPeople, big: "Biggest capitals", small: "Smallest capitals", what: "population of the capital city (within city limits)",
+    source: "Wikipedia list of national capitals by population (city proper; census years vary). You can answer with the capital or its country." }
+};
+const GEN = [];
+for (const k of Object.keys(CONTINENTS)) for (const m of Object.keys(METRICS)) for (const dir of ["big", "small"]) {
+  const M = METRICS[m];
+  const rows = Object.entries(COUNTRIES).filter(([, r]) => r.k === k && M.get(r) != null);
+  if (rows.length < 10) continue;
+  rows.sort((x, y) => dir === "big" ? M.get(y[1]) - M.get(x[1]) : M.get(x[1]) - M.get(y[1]));
+  const list = rows.map(([name, r]) => m === "cap"
+    ? [r.cap[0], `${M.fmt(r.cap[1])} · ${name}`, [...r.cap[2], name, ...(r.al || [])]]
+    : [name, M.fmt(M.get(r)), r.al || []]);
+  const tension = [];
+  for (let rk = 11; rk <= Math.min(14, list.length); rk++) tension.push(rk);
+  GEN.push({
+    id: `${k}-${m}-${dir}`, cont: k, metric: m, dir, gen: true,
+    title: `${dir === "big" ? M.big : M.small} in ${CONTINENTS[k]}`,
+    by: `${m.startsWith("gdp") ? M.label : M.label.toLowerCase()} · ${dir === "big" ? "largest" : "smallest"} first`,
+    prompt: `Countries in ${CONTINENTS[k]} ranked by ${M.what}, ${dir === "big" ? "largest first" : "smallest first. Number 1 is the smallest, so number 10 is the 10th smallest"}. ${CONT_NOTE[k] || ""}`.trim(),
+    source: M.source, tension, list
+  });
+}
+
+
+/* ---------- world lists (coastlines, languages, health, religion, cities) ---------- */
+const EXTRA = [{"id":"coast","group":"geo","title":"Longest coastlines","by":"by coastline length","prompt":"Countries ranked by the length of their coastline. Territories such as Greenland don't count.","source":"CIA World Factbook coastline lengths, via Wikipedia.","list":[["Canada","202,080 km",[]],["Norway","83,281 km",["norge"]],["Indonesia","54,716 km",[]],["Russia","37,653 km",["russian federation"]],["Philippines","36,289 km",[]],["Japan","29,751 km",[]],["Australia","25,760 km",[]],["United States","19,924 km",["usa","us","america","united states of america"]],["New Zealand","15,134 km",[]],["China","14,500 km",[]],["Greece","13,676 km",["hellas"]],["United Kingdom","12,429 km",["uk","britain","great britain","england"]],["India","11,098 km",[]],["Mexico","9,330 km",[]],["Italy","7,600 km",["italia"]],["Brazil","7,491 km",["brasil"]],["Denmark","7,314 km",["danmark"]],["Turkey","7,200 km",["turkiye"]],["Chile","6,435 km",[]],["Micronesia","6,112 km",["federated states of micronesia","fsm"]],["Croatia","5,835 km",["hrvatska"]],["Solomon Islands","5,313 km",[]],["Papua New Guinea","5,152 km",["png"]],["Argentina","4,989 km",[]],["Iceland","4,970 km",[]],["Spain","4,964 km",["espana"]],["France","4,853 km",[]],["Madagascar","4,828 km",[]],["Malaysia","4,675 km",[]],["Estonia","3,794 km",[]]],"tension":[11,12,13,14]},{"id":"landlocked","group":"geo","title":"Largest landlocked countries","by":"by area","prompt":"Countries with no coastline, ranked by total area. Countries on the Caspian Sea, like Kazakhstan, count as landlocked.","source":"Total areas from Wikipedia's list of countries by area; landlocked status as commonly listed.","list":[["Kazakhstan","2,724,910 km²",[]],["Mongolia","1,564,116 km²",[]],["Chad","1,284,000 km²",[]],["Niger","1,267,000 km²",[]],["Mali","1,240,192 km²",[]],["Ethiopia","1,104,300 km²",[]],["Bolivia","1,098,581 km²",[]],["Zambia","752,612 km²",[]],["Afghanistan","652,864 km²",[]],["South Sudan","644,329 km²",[]],["Central African Republic","622,984 km²",["car"]],["Botswana","582,000 km²",[]],["Turkmenistan","488,100 km²",[]],["Uzbekistan","447,400 km²",[]],["Paraguay","406,752 km²",[]],["Zimbabwe","390,757 km²",[]],["Burkina Faso","274,200 km²",[]],["Uganda","241,550 km²",[]],["Laos","236,800 km²",["lao"]],["Belarus","207,600 km²",[]],["Kyrgyzstan","199,949 km²",["kyrgyz republic"]],["Nepal","147,181 km²",[]],["Tajikistan","144,100 km²",[]],["Malawi","118,484 km²",[]],["Hungary","93,025 km²",[]],["Serbia","88,499 km²",[]],["Azerbaijan","86,600 km²",[]],["Austria","83,878 km²",["osterreich"]],["Czechia","78,871 km²",["czech republic","czech"]],["Slovakia","49,035 km²",["slovak republic"]],["Switzerland","41,291 km²",["schweiz","suisse"]],["Bhutan","38,394 km²",[]],["Moldova","33,847 km²",["republic of moldova"]],["Lesotho","30,355 km²",[]],["Armenia","29,743 km²",[]],["Burundi","27,834 km²",[]],["Rwanda","26,338 km²",[]],["North Macedonia","25,713 km²",["macedonia"]],["Eswatini","17,363 km²",["swaziland"]],["Kosovo","10,887 km²",[]],["Luxembourg","2,586 km²",[]],["Andorra","468 km²",[]],["Liechtenstein","160 km²",[]],["San Marino","61 km²",[]],["Vatican City","0.44 km²",["vatican","holy see"]]],"tension":[11,12,13,14]},{"id":"neighbours","group":"geo","title":"Most neighbouring countries","by":"by number of land borders","prompt":"Countries ranked by how many countries they share a land border with (France counts its borders in South America and the Caribbean). Ties are broken by total land-border length.","source":"Wikipedia list of countries by number of land borders.","list":[["China","14 neighbours",[]],["Russia","14 neighbours",["russian federation"]],["France","11 neighbours",[]],["Brazil","10 neighbours",["brasil"]],["DR Congo","9 neighbours",["drc","congo","democratic republic of the congo","congo kinshasa","zaire"]],["Germany","9 neighbours",["deutschland"]],["Zambia","8 neighbours",[]],["Saudi Arabia","8 neighbours",[]],["Tanzania","8 neighbours",[]],["Turkey","8 neighbours",["turkiye"]],["Austria","8 neighbours",["osterreich"]],["Serbia","8 neighbours",[]],["India","7 neighbours",[]],["Mali","7 neighbours",[]],["Sudan","7 neighbours",[]],["Algeria","7 neighbours",[]],["Niger","7 neighbours",[]],["Afghanistan","7 neighbours",[]],["Iran","7 neighbours",["persia"]],["Ukraine","7 neighbours",[]],["Poland","7 neighbours",["polska"]],["Hungary","7 neighbours",[]],["Chad","6 neighbours",[]],["Ethiopia","6 neighbours",[]],["Central African Republic","6 neighbours",["car"]],["South Africa","6 neighbours",[]],["South Sudan","6 neighbours",[]],["Cameroon","6 neighbours",[]],["Mozambique","6 neighbours",[]],["Libya","6 neighbours",[]],["Iraq","6 neighbours",[]],["Guinea","6 neighbours",[]],["Burkina Faso","6 neighbours",[]],["Italy","6 neighbours",["italia"]]],"tension":[11,12,13,14]},{"id":"lang-total","group":"lang","title":"Most spoken languages","by":"by total speakers","prompt":"Languages ranked by everyone who speaks them, native and second-language speakers together.","source":"Ethnologue 2026, via Wikipedia (figures in millions).","list":[["English","1,530 M",[]],["Mandarin Chinese","1,183 M",["mandarin","chinese"]],["Hindi","611 M",[]],["Spanish","561 M",[]],["Modern Standard Arabic","335 M",["arabic","standard arabic"]],["French","334 M",[]],["Bengali","274 M",["bangla"]],["Portuguese","269 M",[]],["Indonesian","255 M",["bahasa indonesia","bahasa"]],["Urdu","246 M",[]],["Russian","210 M",[]],["Standard German","133 M",["german"]],["Japanese","126 M",[]],["Nigerian Pidgin","121 M",["pidgin","naija"]],["Egyptian Arabic","118 M",["egyptian"]],["Marathi","99 M",[]],["Vietnamese","97 M",[]],["Telugu","96 M",[]],["Swahili","95 M",["kiswahili"]],["Hausa","94 M",[]],["Turkish","94 M",[]],["Western Punjabi","90 M",["punjabi"]],["Tagalog","87 M",["filipino"]],["Tamil","86 M",[]],["Yue Chinese","86 M",["cantonese","yue"]],["Wu Chinese","83 M",["wu","shanghainese"]],["Iranian Persian","82 M",["persian","farsi"]],["Korean","82 M",[]],["Amharic","78 M",[]],["Thai","71 M",[]]],"tension":[11,12,13,14]},{"id":"lang-native","group":"lang","title":"Most native speakers","by":"by first-language speakers","prompt":"Languages ranked by native (first-language) speakers. Ethnologue counts Arabic dialects separately, like Egyptian Arabic, and Chinese varieties separately, like Cantonese.","source":"Ethnologue 2026, via Wikipedia (figures in millions).","list":[["Mandarin Chinese","988 M",["mandarin","chinese"]],["Spanish","487 M",[]],["English","372 M",[]],["Hindi","347 M",[]],["Portuguese","252 M",[]],["Bengali","232 M",["bangla"]],["Russian","133 M",[]],["Japanese","124 M",[]],["Western Punjabi","90 M",["punjabi"]],["Turkish","86 M",[]],["Vietnamese","86 M",[]],["Yue Chinese","85 M",["cantonese","yue"]],["Egyptian Arabic","83 M",["egyptian"]],["Wu Chinese","83 M",["wu","shanghainese"]],["Marathi","83 M",[]],["Telugu","83 M",[]],["Korean","82 M",[]],["Tamil","79 M",[]],["Urdu","78 M",[]],["Indonesian","78 M",["bahasa indonesia","bahasa"]],["Standard German","76 M",["german"]],["French","76 M",[]],["Javanese","69 M",[]],["Iranian Persian","65 M",["persian","farsi"]],["Italian","60 M",[]],["Hausa","58 M",[]],["Gujarati","58 M",[]],["Levantine Arabic","55 M",["levantine"]],["Bhojpuri","53 M",[]]],"tension":[11,12,13,14]},{"id":"lang-l2","group":"lang","title":"Most learned languages","by":"by second-language speakers","prompt":"Languages ranked by people who speak them as a second language.","source":"Ethnologue 2026, via Wikipedia (figures in millions). Taken from the 30 most spoken languages, so smaller languages are not ranked.","list":[["English","1,090 M",[]],["Modern Standard Arabic","335 M",["arabic","standard arabic"]],["Hindi","264 M",[]],["French","258 M",[]],["Mandarin Chinese","194 M",["mandarin","chinese"]],["Indonesian","177 M",["bahasa indonesia","bahasa"]],["Urdu","168 M",[]],["Nigerian Pidgin","116 M",["pidgin","naija"]],["Swahili","91 M",["kiswahili"]],["Russian","77 M",[]],["Spanish","75 M",[]],["Standard German","57 M",["german"]],["Tagalog","54 M",["filipino"]],["Thai","44 M",[]],["Bengali","43 M",["bangla"]],["Amharic","39 M",[]],["Hausa","36 M",[]],["Egyptian Arabic","35 M",["egyptian"]]],"tension":[11,12,13,14]},{"id":"alcohol","group":"health","title":"Most alcohol per person","by":"by alcohol consumption","prompt":"Countries ranked by litres of pure alcohol drunk per person (age 15+) per year. Equal values are listed alphabetically.","source":"WHO global status report on alcohol and health (2024), 2019 data, via Wikipedia.","list":[["Romania","16.9 L",[]],["Latvia","14.4 L",[]],["Georgia","14.3 L",[]],["Seychelles","13.8 L",[]],["Czechia","13.3 L",["czech republic","czech"]],["Estonia","12.9 L",[]],["Uganda","12.2 L",[]],["Austria","12.1 L",["osterreich"]],["Poland","12.1 L",["polska"]],["Bulgaria","12.0 L",[]],["France","11.9 L",[]],["Lithuania","11.8 L",[]],["Antigua and Barbuda","11.6 L",["antigua"]],["Hungary","11.6 L",[]],["Laos","11.6 L",["lao"]],["Andorra","11.5 L",[]],["Germany","11.5 L",["deutschland"]],["Luxembourg","11.5 L",[]],["Ireland","11.4 L",[]],["Spain","11.2 L",["espana"]],["Moldova","11.1 L",["republic of moldova"]],["Slovenia","11.0 L",[]],["Slovakia","10.9 L",["slovak republic"]],["Croatia","10.8 L",["hrvatska"]],["Portugal","10.8 L",[]],["Belarus","10.7 L",[]],["Saint Lucia","10.7 L",["st lucia"]],["Barbados","10.5 L",[]],["Montenegro","10.5 L",[]],["Russia","10.4 L",["russian federation"]],["Tanzania","10.4 L",[]]],"tension":[11,12,13,14]},{"id":"coffee","group":"health","title":"Most coffee per person","by":"by coffee consumption","prompt":"Countries ranked by kilos of coffee drunk per person per year.","source":"International Coffee Organization figures as published by WorldAtlas (older data, about 2016–2019).","list":[["Finland","12.0 kg",["suomi"]],["Norway","9.9 kg",["norge"]],["Iceland","9.0 kg",[]],["Denmark","8.7 kg",["danmark"]],["Netherlands","8.4 kg",["holland","the netherlands"]],["Sweden","8.2 kg",["sverige"]],["Switzerland","7.9 kg",["schweiz","suisse"]],["Belgium","6.8 kg",[]],["Luxembourg","6.5 kg",[]],["Canada","6.5 kg",[]],["Bosnia and Herzegovina","6.2 kg",["bosnia"]],["Austria","6.1 kg",["osterreich"]],["Italy","5.9 kg",["italia"]],["Brazil","5.8 kg",["brasil"]],["Slovenia","5.8 kg",[]],["Germany","5.5 kg",["deutschland"]],["Greece","5.4 kg",["hellas"]],["France","5.4 kg",[]],["Croatia","5.1 kg",["hrvatska"]],["Cyprus","4.9 kg",[]],["Lebanon","4.8 kg",[]],["Estonia","4.5 kg",[]],["Spain","4.5 kg",["espana"]],["Portugal","4.3 kg",[]],["United States","4.2 kg",["usa","us","america","united states of america"]]],"tension":[11,12,13,14]},{"id":"life-high","group":"health","title":"Highest life expectancy","by":"life expectancy · highest first","prompt":"Countries ranked by life expectancy at birth in 2025, highest first.","source":"UN World Population Prospects 2024, estimates for 2025, via StatisticsTimes. Territories such as Hong Kong and Macau are left out.","list":[["Monaco","86.7 years",[]],["San Marino","86.0 years",[]],["Japan","85.2 years",[]],["South Korea","84.6 years",["korea","republic of korea"]],["Andorra","84.5 years",[]],["Switzerland","84.4 years",["schweiz","suisse"]],["Australia","84.3 years",[]],["Italy","84.2 years",["italia"]],["Singapore","84.1 years",[]],["Spain","84.1 years",["espana"]],["Liechtenstein","84.1 years",[]],["Malta","83.8 years",[]],["Norway","83.8 years",["norge"]],["Sweden","83.7 years",["sverige"]],["France","83.7 years",[]],["Vatican City","83.4 years",["vatican","holy see"]],["United Arab Emirates","83.4 years",["uae","emirates"]],["Iceland","83.3 years",[]],["Canada","83.0 years",[]],["Ireland","82.9 years",[]],["Israel","82.9 years",[]],["Portugal","82.9 years",[]],["Qatar","82.8 years",[]],["Luxembourg","82.6 years",[]],["Netherlands","82.6 years",["holland","the netherlands"]],["Belgium","82.6 years",[]],["New Zealand","82.5 years",[]],["Austria","82.5 years",["osterreich"]],["Finland","82.4 years",["suomi"]],["Greece","82.4 years",["hellas"]]],"tension":[11,12,13,14]},{"id":"life-low","group":"health","title":"Lowest life expectancy","by":"life expectancy · lowest first","prompt":"Countries ranked by life expectancy at birth in 2025, lowest first. Number 1 has the lowest, so number 10 is the 10th lowest.","source":"UN World Population Prospects 2024, estimates for 2025, via StatisticsTimes. Territories such as Hong Kong and Macau are left out.","list":[["Nigeria","55.0 years",[]],["Chad","55.6 years",[]],["South Sudan","58.0 years",[]],["Central African Republic","58.1 years",["car"]],["Lesotho","58.6 years",[]],["Somalia","59.3 years",[]],["Mali","61.1 years",[]],["Guinea","61.2 years",[]],["Benin","61.3 years",[]],["Burkina Faso","61.6 years",[]],["Niger","61.9 years",[]],["Sierra Leone","62.3 years",[]],["DR Congo","62.4 years",["drc","congo","democratic republic of the congo","congo kinshasa","zaire"]],["Côte d'Ivoire","62.4 years",["ivory coast","cote divoire"]],["Nauru","62.6 years",[]],["Liberia","62.6 years",[]],["Togo","63.3 years",[]],["Zimbabwe","63.6 years",[]],["Burundi","64.1 years",[]],["Mozambique","64.1 years",[]],["Kenya","64.2 years",[]],["Madagascar","64.2 years",[]],["Equatorial Guinea","64.3 years",[]],["Cameroon","64.5 years",[]],["Eswatini","64.5 years",["swaziland"]],["Guinea-Bissau","64.6 years",["guinea bissau"]],["Angola","65.2 years",[]],["Haiti","65.5 years",[]],["Ghana","66.1 years",[]],["Republic of the Congo","66.4 years",["congo brazzaville","congo republic","republic of congo"]]],"tension":[11,12,13,14]},{"id":"obesity","group":"health","title":"Highest obesity rates","by":"by share of adults with obesity","prompt":"Countries ranked by the share of adults with obesity (BMI 30 or more). Territories such as American Samoa are left out.","source":"World Health Organization estimates, via Wikipedia.","list":[["Tonga","72.3%",[]],["Nauru","71.4%",[]],["Tuvalu","64.7%",[]],["Samoa","63.2%",[]],["Bahamas","48.4%",["the bahamas"]],["Saint Kitts and Nevis","47.9%",["st kitts","st kitts and nevis","saint kitts"]],["Micronesia","46.8%",["federated states of micronesia","fsm"]],["Kiribati","45.3%",[]],["Belize","43.2%",[]],["Egypt","42.8%",[]],["Qatar","42.4%",[]],["Palau","42.1%",[]],["United States","41.8%",["usa","us","america","united states of america"]],["Kuwait","41.3%",[]],["Marshall Islands","41.2%",[]],["Chile","41.1%",[]],["Georgia","40.1%",[]],["Barbados","39.6%",[]],["Fiji","39.3%",[]],["Saudi Arabia","39.2%",[]],["Argentina","38.1%",[]],["Panama","37.8%",[]],["Brunei","37.7%",["brunei darussalam"]],["Romania","37.7%",[]],["Mexico","37.4%",[]],["Hungary","36.9%",[]],["Iraq","36.8%",[]],["Croatia","36.5%",["hrvatska"]],["Uruguay","36.3%",[]],["Jamaica","35.7%",[]]],"tension":[11,12,13,14]},{"id":"rel-world","group":"religion","title":"Largest religions in the world","by":"by followers","prompt":"Religions ranked by number of followers in 2020. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Religion Database (2020 figures), via Encyclopaedia Britannica.","list":[["Christianity","2.52 bn",["christian","christians"]],["Islam","1.90 bn",["muslim","muslims"]],["Hinduism","1.09 bn",["hindu","hindus"]],["Non-religious","744 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Buddhism","531 M",["buddhist","buddhists"]],["Chinese folk religion","458 M",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Ethnic religions","288 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Atheism","147 M",["atheist","atheists"]],["New religions","67.5 M",["new religious movements","new religion","new religionists","neoreligion"]],["Sikhism","29.3 M",["sikh","sikhs"]],["Spiritism","14.8 M",["spiritualism","spiritist","spiritists"]],["Judaism","14.8 M",["jewish","jews","jew"]],["Bahá'í","9.15 M",["bahai","bahai faith"]],["Daoism","8.77 M",["taoism","taoist","daoist"]],["Confucianism","8.76 M",["confucian"]],["Jainism","6.34 M",["jain","jains"]],["Shinto","2.77 M",["shintoism"]],["Zoroastrianism","205,000",["zoroastrian","parsi"]]],"tension":[11,12,13,14]},{"id":"rel-africa","group":"religion","title":"Largest religions in Africa","by":"by followers","prompt":"Religions in Africa ranked by number of followers. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Christianity","441 M",["christian","christians"]],["Islam","378 M",["muslim","muslims"]],["Ethnic religions","114 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Non-religious","6.25 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Hinduism","2.76 M",["hindu","hindus"]],["Bahá'í","2.13 M",["bahai","bahai faith"]],["Atheism","606,000",["atheist","atheists"]],["Buddhism","158,000",["buddhist","buddhists"]],["Judaism","129,000",["jewish","jews","jew"]],["New religions","123,000",["new religious movements","new religion","new religionists","neoreligion"]],["Jainism","82,400",["jain","jains"]],["Sikhism","62,900",["sikh","sikhs"]],["Chinese folk religion","37,500",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Spiritism","3,200",["spiritualism","spiritist","spiritists"]],["Zoroastrianism","1,000",["zoroastrian","parsi"]],["Confucianism","300",["confucian"]]],"tension":[11,12,13,14]},{"id":"rel-asia","group":"religion","title":"Largest religions in Asia","by":"by followers","prompt":"Religions in Asia ranked by number of followers. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Islam","962 M",["muslim","muslims"]],["Hinduism","868 M",["hindu","hindus"]],["Non-religious","616 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Chinese folk religion","384 M",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Buddhism","379 M",["buddhist","buddhists"]],["Christianity","360 M",["christian","christians"]],["Ethnic religions","146 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Atheism","128 M",["atheist","atheists"]],["New religions","104 M",["new religious movements","new religion","new religionists","neoreligion"]],["Sikhism","21.7 M",["sikh","sikhs"]],["Confucianism","6.37 M",["confucian"]],["Judaism","5.72 M",["jewish","jews","jew"]],["Jainism","5.17 M",["jain","jains"]],["Bahá'í","3.68 M",["bahai","bahai faith"]],["Daoism","3.39 M",["taoism","taoist","daoist"]],["Shinto","2.73 M",["shintoism"]],["Zoroastrianism","152,000",["zoroastrian","parsi"]],["Spiritism","2,000",["spiritualism","spiritist","spiritists"]]],"tension":[11,12,13,14]},{"id":"rel-europe","group":"religion","title":"Largest religions in Europe","by":"by followers","prompt":"Religions in Europe ranked by number of followers. Europe includes all of Russia. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Christianity","565 M",["christian","christians"]],["Non-religious","94.8 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Islam","39.7 M",["muslim","muslims"]],["Atheism","19.8 M",["atheist","atheists"]],["Judaism","1.84 M",["jewish","jews","jew"]],["Buddhism","1.77 M",["buddhist","buddhists"]],["Hinduism","1.68 M",["hindu","hindus"]],["Ethnic religions","1.15 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Sikhism","478,000",["sikh","sikhs"]],["New religions","380,000",["new religious movements","new religion","new religionists","neoreligion"]],["Chinese folk religion","309,000",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Spiritism","139,000",["spiritualism","spiritist","spiritists"]],["Bahá'í","139,000",["bahai","bahai faith"]],["Confucianism","18,000",["confucian"]],["Zoroastrianism","5,500",["zoroastrian","parsi"]]],"tension":[11,12,13,14]},{"id":"rel-latin-america","group":"religion","title":"Largest religions in Latin America","by":"by followers","prompt":"Religions in Latin America ranked by number of followers. Latin America means Mexico, Central America, the Caribbean and South America. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Christianity","533 M",["christian","christians"]],["Non-religious","17.1 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Spiritism","13.2 M",["spiritualism","spiritist","spiritists"]],["Ethnic religions","3.73 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Atheism","2.83 M",["atheist","atheists"]],["Islam","1.78 M",["muslim","muslims"]],["Judaism","971,000",["jewish","jews","jew"]],["Bahá'í","891,000",["bahai","bahai faith"]],["New religions","800,000",["new religious movements","new religion","new religionists","neoreligion"]],["Hinduism","760,000",["hindu","hindus"]],["Buddhism","743,000",["buddhist","buddhists"]],["Chinese folk religion","183,000",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Shinto","7,600",["shintoism"]],["Sikhism","6,600",["sikh","sikhs"]],["Confucianism","800",["confucian"]]],"tension":[11,12,13,14]},{"id":"rel-northern-america","group":"religion","title":"Largest religions in Northern America","by":"by followers","prompt":"Religions in Northern America ranked by number of followers. Northern America means the United States and Canada (plus Greenland and Bermuda). Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Christianity","273 M",["christian","christians"]],["Non-religious","38.8 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Judaism","6.19 M",["jewish","jews","jew"]],["Islam","5.45 M",["muslim","muslims"]],["Buddhism","3.29 M",["buddhist","buddhists"]],["Atheism","1.78 M",["atheist","atheists"]],["Hinduism","1.72 M",["hindu","hindus"]],["New religions","1.59 M",["new religious movements","new religion","new religionists","neoreligion"]],["Ethnic religions","1.58 M",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Chinese folk religion","740,000",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Bahá'í","718,000",["bahai","bahai faith"]],["Sikhism","630,000",["sikh","sikhs"]],["Spiritism","164,000",["spiritualism","spiritist","spiritists"]],["Shinto","61,800",["shintoism"]],["Zoroastrianism","20,600",["zoroastrian","parsi"]],["Daoism","12,200",["taoism","taoist","daoist"]],["Jainism","8,400",["jain","jains"]]],"tension":[11,12,13,14]},{"id":"rel-oceania","group":"religion","title":"Largest religions in Oceania","by":"by followers","prompt":"Religions in Oceania ranked by number of followers. Non-religious (agnostic) and atheist people count as their own groups.","source":"World Christian Database, mid-2007 figures, as published by Encyclopaedia Britannica (the newest public breakdown by continent). Rankings shift slowly, but the numbers are old.","list":[["Christianity","27.0 M",["christian","christians"]],["Non-religious","4.04 M",["agnosticism","agnostic","agnostics","nonreligious","no religion","irreligion","none","secular"]],["Buddhism","565,000",["buddhist","buddhists"]],["Hinduism","466,000",["hindu","hindus"]],["Islam","438,400",["muslim","muslims"]],["Atheism","416,000",["atheist","atheists"]],["Ethnic religions","339,000",["ethnic religion","tribal religions","ethnoreligion","ethnoreligions","indigenous religions","traditional african religion","african traditional religion","animism"]],["Chinese folk religion","146,000",["chinese folk religions","folk religion","chinese traditional religion","chinese universism"]],["Bahá'í","137,000",["bahai","bahai faith"]],["Judaism","107,000",["jewish","jews","jew"]],["New religions","88,300",["new religious movements","new religion","new religionists","neoreligion"]],["Confucianism","52,200",["confucian"]],["Sikhism","49,000",["sikh","sikhs"]],["Spiritism","7,400",["spiritualism","spiritist","spiritists"]],["Zoroastrianism","1,700",["zoroastrian","parsi"]],["Jainism","700",["jain","jains"]]],"tension":[11,12,13,14]},{"id":"city-af","group":"cities","title":"Biggest non-capital cities in Africa","by":"by population (urban area)","prompt":"Cities in Africa that are not a national capital, ranked by population (whole urban area).","source":"Wikipedia list of cities in Africa by population (urban areas, mostly 2026 estimates). Abidjan, Cotonou and Dar es Salaam count because their countries' official capitals are elsewhere.","list":[["Lagos","21.9 M · Nigeria",[]],["Johannesburg","15.1 M · South Africa",["joburg"]],["Abidjan","7.30 M · Côte d'Ivoire",[]],["Dar es Salaam","6.90 M · Tanzania",["dar"]],["Alexandria","6.35 M · Egypt",[]],["Kano","5.55 M · Nigeria",[]],["Giza","4.46 M · Egypt",[]],["Ekurhuleni","4.07 M · South Africa",[]],["Durban","3.98 M · South Africa",[]],["Douala","3.95 M · Cameroon",[]],["Ibadan","3.48 M · Nigeria",[]],["Lubumbashi","2.98 M · DR Congo",[]],["Kumasi","2.95 M · Ghana",[]],["Omdurman","2.81 M · Sudan",[]],["Mbuji-Mayi","2.60 M · DR Congo",[]],["Port Harcourt","2.30 M · Nigeria",[]],["Cotonou","2.23 M · Benin",[]],["Kaduna","2.02 M · Nigeria",[]],["Benin City","1.84 M · Nigeria",[]],["Matola","1.80 M · Mozambique",[]]],"tension":[11,12,13,14]},{"id":"city-as","group":"cities","title":"Biggest non-capital cities in Asia","by":"by population (city limits)","prompt":"Cities in Asia that are not a national capital, ranked by population (inside city limits).","source":"Wikipedia list of Asian cities by population within city limits (years vary). Istanbul counts as Europe.","list":[["Shanghai","24.3 M · China",[]],["Karachi","20.4 M · Pakistan",[]],["Guangzhou","18.7 M · China",["canton"]],["Mumbai","17.7 M · India",["bombay"]],["Shenzhen","17.5 M · China",[]],["Lahore","13.0 M · Pakistan",[]],["Suzhou","10.7 M · China",[]],["Ho Chi Minh City","8.99 M · Vietnam",["saigon","ho chi minh"]],["Bengaluru","8.44 M · India",["bangalore"]],["Dongguan","8.22 M · China",[]],["Chongqing","8.19 M · China",[]],["Nanjing","8.19 M · China",[]],["Shenyang","8.11 M · China",[]],["Hong Kong","7.30 M · China",["hongkong"]],["Changsha","7.04 M · China",[]],["Wuhan","6.89 M · China",[]],["Tianjin","6.86 M · China",[]],["Hyderabad","6.81 M · India",[]],["Faisalabad","6.48 M · Pakistan",[]],["Foshan","6.15 M · China",[]]],"tension":[11,12,13,14]},{"id":"city-eu","group":"cities","title":"Biggest non-capital cities in Europe","by":"by population (city limits)","prompt":"Cities in Europe that are not a national capital, ranked by population (inside city limits).","source":"Wikipedia list of European cities by population within city limits (mostly 2025). Istanbul counts as Europe; Ukrainian figures are from 2022.","list":[["Istanbul","15.8 M · Turkey",["constantinople"]],["Saint Petersburg","5.65 M · Russia",["st petersburg","petersburg","leningrad"]],["Hamburg","1.87 M · Germany",[]],["Barcelona","1.73 M · Spain",[]],["Munich","1.51 M · Germany",["munchen"]],["Kharkiv","1.42 M · Ukraine",["kharkov"]],["Milan","1.36 M · Italy",["milano"]],["Kazan","1.33 M · Russia",[]],["Nizhny Novgorod","1.20 M · Russia",[]],["Birmingham","1.18 M · United Kingdom",[]],["Ufa","1.17 M · Russia",[]],["Krasnodar","1.15 M · Russia",[]],["Samara","1.15 M · Russia",[]],["Rostov-on-Don","1.14 M · Russia",["rostov"]],["Voronezh","1.04 M · Russia",[]],["Perm","1.03 M · Russia",[]],["Cologne","1.03 M · Germany",["koln"]],["Volgograd","1.01 M · Russia",[]],["Odesa","1.01 M · Ukraine",["odessa"]]],"tension":[11,12,13,14]},{"id":"city-na","group":"cities","title":"Biggest non-capital cities in North America","by":"by population (city limits)","prompt":"Cities in North America that are not a national capital, ranked by population (inside city limits).","source":"Wikipedia list of North American cities by population (city limits; Mexico 2020 census, USA 2025, Canada 2024).","list":[["New York City","8.58 M · United States",["new york","nyc"]],["Los Angeles","3.87 M · United States",[]],["Toronto","3.27 M · Canada",[]],["Chicago","2.73 M · United States",[]],["Houston","2.40 M · United States",[]],["Montreal","1.95 M · Canada",[]],["Tijuana","1.81 M · Mexico",[]],["Phoenix","1.67 M · United States",[]],["Ecatepec de Morelos","1.64 M · Mexico",["ecatepec"]],["León","1.58 M · Mexico",[]],["Philadelphia","1.57 M · United States",[]],["Calgary","1.57 M · Canada",[]],["San Antonio","1.55 M · United States",[]],["Puebla","1.54 M · Mexico",[]],["Juárez","1.50 M · Mexico",["ciudad juarez"]],["Zapopan","1.48 M · Mexico",[]],["San Diego","1.41 M · United States",[]],["Guadalajara","1.39 M · Mexico",[]],["Dallas","1.33 M · United States",[]],["Edmonton","1.19 M · Canada",[]]],"tension":[11,12,13,14]},{"id":"city-sa","group":"cities","title":"Biggest non-capital cities in South America","by":"by population (city limits)","prompt":"Cities in South America that are not a national capital, ranked by population (inside city limits).","source":"Wikipedia list of largest cities in the Americas (city limits, mostly 2022–2025).","list":[["São Paulo","11.9 M · Brazil",[]],["Rio de Janeiro","6.73 M · Brazil",["rio"]],["Medellín","2.66 M · Colombia",[]],["Guayaquil","2.65 M · Ecuador",[]],["Fortaleza","2.57 M · Brazil",[]],["Salvador","2.57 M · Brazil",[]],["Belo Horizonte","2.42 M · Brazil",[]],["Manaus","2.28 M · Brazil",[]],["Cali","2.27 M · Colombia",[]],["Curitiba","1.83 M · Brazil",[]],["Maracaibo","1.65 M · Venezuela",[]],["Santa Cruz de la Sierra","1.61 M · Bolivia",["santa cruz"]],["Recife","1.59 M · Brazil",[]],["Córdoba","1.51 M · Argentina",[]],["Goiânia","1.49 M · Brazil",[]],["Porto Alegre","1.48 M · Brazil",[]],["Belém","1.40 M · Brazil",[]],["Rosario","1.35 M · Argentina",[]],["Guarulhos","1.35 M · Brazil",[]],["Barranquilla","1.34 M · Colombia",[]]],"tension":[11,12,13,14]},{"id":"city-oc","group":"cities","title":"Biggest non-capital cities in Oceania","by":"by population (urban area)","prompt":"Cities in Oceania that are not a national capital, ranked by population (whole urban area).","source":"Wikipedia list of cities in Oceania by population (urban areas; Australia 2021, New Zealand 2025). Honolulu and the Indonesian part of New Guinea count as Oceania.","list":[["Sydney","5.36 M · Australia",[]],["Melbourne","5.10 M · Australia",[]],["Brisbane","2.57 M · Australia",[]],["Perth","2.10 M · Australia",[]],["Auckland","1.55 M · New Zealand",[]],["Adelaide","1.47 M · Australia",[]],["Honolulu","1.02 M · United States",[]],["Gold Coast","718,772 · Australia",[]],["Newcastle–Maitland","505,489 · Australia",["newcastle"]],["Christchurch","407,800 · New Zealand",[]],["Jayapura","398,478 · Indonesia",[]],["Sunshine Coast","353,906 · Australia",[]],["Central Coast","338,567 · Australia",[]],["Wollongong","312,167 · Australia",[]],["Geelong","287,704 · Australia",[]],["Sorong","284,410 · Indonesia",[]],["Hobart","218,386 · Australia",[]],["Lae","203,056 · Papua New Guinea",[]],["Hamilton","192,100 · New Zealand",[]],["Townsville","184,271 · Australia",[]]],"tension":[11,12,13,14]}];
+EXTRA.push(...[{"id":"passport-strong","group":"geo","title":"Strongest passports","by":"visa-free destinations · most first","prompt":"Passports ranked by how many destinations their holders can visit without a visa arranged in advance. Passports with the same score share a place, so one place can have several right answers: naming any of them scores that place, but two players can't name the same country.","source":"Henley Passport Index 2026 (the full table published on Wikipedia; the October 2026 update moved Singapore to 193). Hong Kong and Macau passports are included.","tension":[11,12,13,14],"list":[["Singapore","192 destinations",[],[["Singapore",[]]]],["Japan, South Korea, United Arab Emirates","187 destinations",[],[["Japan",[]],["South Korea",["korea","republic of korea"]],["United Arab Emirates",["uae","emirates"]]]],["Sweden","186 destinations",[],[["Sweden",["sverige"]]]],["Belgium, Denmark, Finland, France, Germany, Ireland, Italy, Luxembourg, Netherlands, Norway, Spain, Switzerland","185 destinations",[],[["Belgium",[]],["Denmark",["danmark"]],["Finland",["suomi"]],["France",[]],["Germany",["deutschland"]],["Ireland",[]],["Italy",["italia"]],["Luxembourg",[]],["Netherlands",["holland","the netherlands"]],["Norway",["norge"]],["Spain",["espana"]],["Switzerland",["schweiz","suisse"]]]],["Austria, Greece, Malta, Portugal","184 destinations",[],[["Austria",["osterreich"]],["Greece",["hellas"]],["Malta",[]],["Portugal",[]]]],["Hungary, Malaysia, Poland, United Kingdom","183 destinations",[],[["Hungary",[]],["Malaysia",[]],["Poland",["polska"]],["United Kingdom",["uk","britain","great britain","england"]]]],["Australia, Canada, Czechia, Latvia, New Zealand, Slovakia, Slovenia","182 destinations",[],[["Australia",[]],["Canada",[]],["Czechia",["czech republic","czech"]],["Latvia",[]],["New Zealand",[]],["Slovakia",["slovak republic"]],["Slovenia",[]]]],["Croatia, Estonia","181 destinations",[],[["Croatia",["hrvatska"]],["Estonia",[]]]],["Liechtenstein, Lithuania","180 destinations",[],[["Liechtenstein",[]],["Lithuania",[]]]],["Iceland, United States","179 destinations",[],[["Iceland",[]],["United States",["usa","us","america","united states of america"]]]],["Bulgaria, Romania","177 destinations",[],[["Bulgaria",[]],["Romania",[]]]],["Monaco","176 destinations",[],[["Monaco",[]]]],["Chile, Cyprus, Hong Kong","174 destinations",[],[["Chile",[]],["Cyprus",[]],["Hong Kong",["hongkong","hk"]]]],["Andorra","169 destinations",[],[["Andorra",[]]]],["Argentina, Brazil","168 destinations",[],[["Argentina",[]],["Brazil",["brasil"]]]],["Israel, San Marino","166 destinations",[],[["Israel",[]],["San Marino",[]]]],["Barbados, Brunei","163 destinations",[],[["Barbados",[]],["Brunei",["brunei darussalam"]]]],["Bahamas","158 destinations",[],[["Bahamas",["the bahamas"]]]],["Saint Kitts and Nevis, Saint Vincent and the Grenadines","157 destinations",[],[["Saint Kitts and Nevis",["st kitts","st kitts and nevis","saint kitts"]],["Saint Vincent and the Grenadines",["st vincent","saint vincent","st vincent and the grenadines"]]]],["Mexico","156 destinations",[],[["Mexico",[]]]],["Uruguay","155 destinations",[],[["Uruguay",[]]]],["Antigua and Barbuda, Seychelles","154 destinations",[],[["Antigua and Barbuda",["antigua"]],["Seychelles",[]]]],["Vatican City","151 destinations",[],[["Vatican City",["vatican","holy see"]]]],["Costa Rica","148 destinations",[],[["Costa Rica",[]]]],["Grenada, Mauritius, Panama","147 destinations",[],[["Grenada",[]],["Mauritius",[]],["Panama",[]]]],["Dominica, Paraguay, Trinidad and Tobago","145 destinations",[],[["Dominica",[]],["Paraguay",[]],["Trinidad and Tobago",["trinidad"]]]],["Saint Lucia","144 destinations",[],[["Saint Lucia",["st lucia"]]]],["Ukraine","142 destinations",[],[["Ukraine",[]]]],["Macau, Peru","141 destinations",[],[["Macau",["macao"]],["Peru",[]]]],["Serbia","135 destinations",[],[["Serbia",[]]]],["Taiwan","134 destinations",[],[["Taiwan",[]]]],["Guatemala, Solomon Islands","132 destinations",[],[["Guatemala",[]],["Solomon Islands",[]]]],["El Salvador","131 destinations",[],[["El Salvador",[]]]],["Colombia","130 destinations",[],[["Colombia",[]]]],["Honduras, Samoa","129 destinations",[],[["Honduras",[]],["Samoa",[]]]],["Marshall Islands, Tonga","127 destinations",[],[["Marshall Islands",[]],["Tonga",[]]]],["Montenegro, North Macedonia","126 destinations",[],[["Montenegro",[]],["North Macedonia",["macedonia"]]]],["Nicaragua, Tuvalu","125 destinations",[],[["Nicaragua",[]],["Tuvalu",[]]]],["Kiribati","122 destinations",[],[["Kiribati",[]]]],["Albania, Bosnia and Herzegovina","121 destinations",[],[["Albania",[]],["Bosnia and Herzegovina",["bosnia"]]]],["Georgia, Micronesia, Palau","120 destinations",[],[["Georgia",[]],["Micronesia",["federated states of micronesia","fsm"]],["Palau",[]]]],["Moldova","119 destinations",[],[["Moldova",["republic of moldova"]]]],["Venezuela","116 destinations",[],[["Venezuela",[]]]],["Russia, Turkey","113 destinations",[],[["Russia",["russian federation"]],["Turkey",["turkiye"]]]],["Qatar","111 destinations",[],[["Qatar",[]]]],["Belize, South Africa","100 destinations",[],[["Belize",[]],["South Africa",[]]]],["Kuwait","96 destinations",[],[["Kuwait",[]]]],["Ecuador","93 destinations",[],[["Ecuador",[]]]],["Maldives, Timor-Leste","92 destinations",[],[["Maldives",[]],["Timor-Leste",["east timor"]]]],["Guyana","88 destinations",[],[["Guyana",[]]]],["Bahrain, Fiji, Saudi Arabia, Vanuatu","87 destinations",[],[["Bahrain",[]],["Fiji",[]],["Saudi Arabia",[]],["Vanuatu",[]]]],["Nauru","86 destinations",[],[["Nauru",[]]]],["Jamaica","85 destinations",[],[["Jamaica",[]]]],["Oman, Papua New Guinea","84 destinations",[],[["Oman",[]],["Papua New Guinea",["png"]]]],["China","82 destinations",[],[["China",[]]]],["Botswana, Kosovo","81 destinations",[],[["Botswana",[]],["Kosovo",[]]]],["Kazakhstan","78 destinations",[],[["Kazakhstan",[]]]],["Belarus, Bolivia","77 destinations",[],[["Belarus",[]],["Bolivia",[]]]],["Thailand","76 destinations",[],[["Thailand",[]]]],["Suriname","75 destinations",[],[["Suriname",[]]]],["Namibia","74 destinations",[],[["Namibia",[]]]],["Lesotho","73 destinations",[],[["Lesotho",[]]]],["Dominican Republic, Morocco, Eswatini","71 destinations",[],[["Dominican Republic",["dr"]],["Morocco",[]],["Eswatini",["swaziland"]]]],["Indonesia, Malawi","70 destinations",[],[["Indonesia",[]],["Malawi",[]]]],["Kenya","69 destinations",[],[["Kenya",[]]]],["Tanzania, Gambia","68 destinations",[],[["Tanzania",[]],["Gambia",["the gambia"]]]],["Azerbaijan, Ghana","67 destinations",[],[["Azerbaijan",[]],["Ghana",[]]]],["Rwanda, Tunisia","66 destinations",[],[["Rwanda",[]],["Tunisia",[]]]],["Benin, Philippines, Uganda","65 destinations",[],[["Benin",[]],["Philippines",[]],["Uganda",[]]]],["Armenia, Mongolia, Zambia","64 destinations",[],[["Armenia",[]],["Mongolia",[]],["Zambia",[]]]],["Cape Verde","63 destinations",[],[["Cape Verde",["cabo verde"]]]],["Sierra Leone","62 destinations",[],[["Sierra Leone",[]]]],["Zimbabwe","61 destinations",[],[["Zimbabwe",[]]]],["Kyrgyzstan, Mozambique, Uzbekistan","59 destinations",[],[["Kyrgyzstan",["kyrgyz republic"]],["Mozambique",[]],["Uzbekistan",[]]]],["São Tomé and Príncipe","58 destinations",[],[["São Tomé and Príncipe",["sao tome","sao tome and principe"]]]],["Togo","57 destinations",[],[["Togo",[]]]],["Burkina Faso, Cuba, India, Senegal","56 destinations",[],[["Burkina Faso",[]],["Cuba",[]],["India",[]],["Senegal",[]]]],["Algeria, Côte d'Ivoire, Gabon, Madagascar, Mauritania","55 destinations",[],[["Algeria",[]],["Côte d'Ivoire",["ivory coast","cote divoire"]],["Gabon",[]],["Madagascar",[]],["Mauritania",[]]]],["Niger","54 destinations",[],[["Niger",[]]]],["Mali, Tajikistan","53 destinations",[],[["Mali",[]],["Tajikistan",[]]]],["Equatorial Guinea, Guinea","52 destinations",[],[["Equatorial Guinea",[]],["Guinea",[]]]],["Chad","51 destinations",[],[["Chad",[]]]],["Comoros, Guinea-Bissau","50 destinations",[],[["Comoros",[]],["Guinea-Bissau",["guinea bissau"]]]],["Egypt, Haiti, Jordan, Liberia","49 destinations",[],[["Egypt",[]],["Haiti",[]],["Jordan",[]],["Liberia",[]]]],["Angola, Burundi, Central African Republic, Vietnam","48 destinations",[],[["Angola",[]],["Burundi",[]],["Central African Republic",["car"]],["Vietnam",["viet nam"]]]],["Bhutan, Cambodia, Cameroon","47 destinations",[],[["Bhutan",[]],["Cambodia",[]],["Cameroon",[]]]],["Republic of the Congo","46 destinations",[],[["Republic of the Congo",["congo brazzaville","congo republic","republic of congo"]]]],["Djibouti, Laos, Turkmenistan","45 destinations",[],[["Djibouti",[]],["Laos",["lao"]],["Turkmenistan",[]]]],["Nigeria","44 destinations",[],[["Nigeria",[]]]],["DR Congo, Lebanon","43 destinations",[],[["DR Congo",["drc","congo","democratic republic of the congo","congo kinshasa","zaire"]],["Lebanon",[]]]],["Ethiopia, Myanmar","42 destinations",[],[["Ethiopia",[]],["Myanmar",["burma"]]]],["South Sudan, Sudan","41 destinations",[],[["South Sudan",[]],["Sudan",[]]]],["Libya, Sri Lanka","39 destinations",[],[["Libya",[]],["Sri Lanka",[]]]],["Eritrea, Iran, Palestine","38 destinations",[],[["Eritrea",[]],["Iran",["persia"]],["Palestine",["state of palestine","west bank and gaza"]]]],["Nepal, North Korea","35 destinations",[],[["Nepal",[]],["North Korea",["dprk"]]]],["Bangladesh","34 destinations",[],[["Bangladesh",[]]]],["Somalia","32 destinations",[],[["Somalia",[]]]],["Pakistan, Yemen","31 destinations",[],[["Pakistan",[]],["Yemen",[]]]],["Iraq","29 destinations",[],[["Iraq",[]]]],["Syria","26 destinations",[],[["Syria",[]]]],["Afghanistan","23 destinations",[],[["Afghanistan",[]]]]]},{"id":"passport-weak","group":"geo","title":"Weakest passports","by":"visa-free destinations · fewest first","prompt":"Passports ranked from the fewest visa-free destinations: number 1 is the weakest passport, so number 10 is the 10th weakest. Passports with the same score share a place, so one place can have several right answers: naming any of them scores that place, but two players can't name the same country.","source":"Henley Passport Index 2026 (the full table published on Wikipedia; the October 2026 update moved Singapore to 193). Hong Kong and Macau passports are included.","tension":[11,12,13,14],"list":[["Afghanistan","23 destinations",[],[["Afghanistan",[]]]],["Syria","26 destinations",[],[["Syria",[]]]],["Iraq","29 destinations",[],[["Iraq",[]]]],["Pakistan, Yemen","31 destinations",[],[["Pakistan",[]],["Yemen",[]]]],["Somalia","32 destinations",[],[["Somalia",[]]]],["Bangladesh","34 destinations",[],[["Bangladesh",[]]]],["Nepal, North Korea","35 destinations",[],[["Nepal",[]],["North Korea",["dprk"]]]],["Eritrea, Iran, Palestine","38 destinations",[],[["Eritrea",[]],["Iran",["persia"]],["Palestine",["state of palestine","west bank and gaza"]]]],["Libya, Sri Lanka","39 destinations",[],[["Libya",[]],["Sri Lanka",[]]]],["South Sudan, Sudan","41 destinations",[],[["South Sudan",[]],["Sudan",[]]]],["Ethiopia, Myanmar","42 destinations",[],[["Ethiopia",[]],["Myanmar",["burma"]]]],["DR Congo, Lebanon","43 destinations",[],[["DR Congo",["drc","congo","democratic republic of the congo","congo kinshasa","zaire"]],["Lebanon",[]]]],["Nigeria","44 destinations",[],[["Nigeria",[]]]],["Djibouti, Laos, Turkmenistan","45 destinations",[],[["Djibouti",[]],["Laos",["lao"]],["Turkmenistan",[]]]],["Republic of the Congo","46 destinations",[],[["Republic of the Congo",["congo brazzaville","congo republic","republic of congo"]]]],["Bhutan, Cambodia, Cameroon","47 destinations",[],[["Bhutan",[]],["Cambodia",[]],["Cameroon",[]]]],["Angola, Burundi, Central African Republic, Vietnam","48 destinations",[],[["Angola",[]],["Burundi",[]],["Central African Republic",["car"]],["Vietnam",["viet nam"]]]],["Egypt, Haiti, Jordan, Liberia","49 destinations",[],[["Egypt",[]],["Haiti",[]],["Jordan",[]],["Liberia",[]]]],["Comoros, Guinea-Bissau","50 destinations",[],[["Comoros",[]],["Guinea-Bissau",["guinea bissau"]]]],["Chad","51 destinations",[],[["Chad",[]]]],["Equatorial Guinea, Guinea","52 destinations",[],[["Equatorial Guinea",[]],["Guinea",[]]]],["Mali, Tajikistan","53 destinations",[],[["Mali",[]],["Tajikistan",[]]]],["Niger","54 destinations",[],[["Niger",[]]]],["Algeria, Côte d'Ivoire, Gabon, Madagascar, Mauritania","55 destinations",[],[["Algeria",[]],["Côte d'Ivoire",["ivory coast","cote divoire"]],["Gabon",[]],["Madagascar",[]],["Mauritania",[]]]],["Burkina Faso, Cuba, India, Senegal","56 destinations",[],[["Burkina Faso",[]],["Cuba",[]],["India",[]],["Senegal",[]]]],["Togo","57 destinations",[],[["Togo",[]]]],["São Tomé and Príncipe","58 destinations",[],[["São Tomé and Príncipe",["sao tome","sao tome and principe"]]]],["Kyrgyzstan, Mozambique, Uzbekistan","59 destinations",[],[["Kyrgyzstan",["kyrgyz republic"]],["Mozambique",[]],["Uzbekistan",[]]]],["Zimbabwe","61 destinations",[],[["Zimbabwe",[]]]],["Sierra Leone","62 destinations",[],[["Sierra Leone",[]]]],["Cape Verde","63 destinations",[],[["Cape Verde",["cabo verde"]]]],["Armenia, Mongolia, Zambia","64 destinations",[],[["Armenia",[]],["Mongolia",[]],["Zambia",[]]]],["Benin, Philippines, Uganda","65 destinations",[],[["Benin",[]],["Philippines",[]],["Uganda",[]]]],["Rwanda, Tunisia","66 destinations",[],[["Rwanda",[]],["Tunisia",[]]]],["Azerbaijan, Ghana","67 destinations",[],[["Azerbaijan",[]],["Ghana",[]]]],["Tanzania, Gambia","68 destinations",[],[["Tanzania",[]],["Gambia",["the gambia"]]]],["Kenya","69 destinations",[],[["Kenya",[]]]],["Indonesia, Malawi","70 destinations",[],[["Indonesia",[]],["Malawi",[]]]],["Dominican Republic, Morocco, Eswatini","71 destinations",[],[["Dominican Republic",["dr"]],["Morocco",[]],["Eswatini",["swaziland"]]]],["Lesotho","73 destinations",[],[["Lesotho",[]]]],["Namibia","74 destinations",[],[["Namibia",[]]]],["Suriname","75 destinations",[],[["Suriname",[]]]],["Thailand","76 destinations",[],[["Thailand",[]]]],["Belarus, Bolivia","77 destinations",[],[["Belarus",[]],["Bolivia",[]]]],["Kazakhstan","78 destinations",[],[["Kazakhstan",[]]]],["Botswana, Kosovo","81 destinations",[],[["Botswana",[]],["Kosovo",[]]]],["China","82 destinations",[],[["China",[]]]],["Oman, Papua New Guinea","84 destinations",[],[["Oman",[]],["Papua New Guinea",["png"]]]],["Jamaica","85 destinations",[],[["Jamaica",[]]]],["Nauru","86 destinations",[],[["Nauru",[]]]],["Bahrain, Fiji, Saudi Arabia, Vanuatu","87 destinations",[],[["Bahrain",[]],["Fiji",[]],["Saudi Arabia",[]],["Vanuatu",[]]]],["Guyana","88 destinations",[],[["Guyana",[]]]],["Maldives, Timor-Leste","92 destinations",[],[["Maldives",[]],["Timor-Leste",["east timor"]]]],["Ecuador","93 destinations",[],[["Ecuador",[]]]],["Kuwait","96 destinations",[],[["Kuwait",[]]]],["Belize, South Africa","100 destinations",[],[["Belize",[]],["South Africa",[]]]],["Qatar","111 destinations",[],[["Qatar",[]]]],["Russia, Turkey","113 destinations",[],[["Russia",["russian federation"]],["Turkey",["turkiye"]]]],["Venezuela","116 destinations",[],[["Venezuela",[]]]],["Moldova","119 destinations",[],[["Moldova",["republic of moldova"]]]],["Georgia, Micronesia, Palau","120 destinations",[],[["Georgia",[]],["Micronesia",["federated states of micronesia","fsm"]],["Palau",[]]]],["Albania, Bosnia and Herzegovina","121 destinations",[],[["Albania",[]],["Bosnia and Herzegovina",["bosnia"]]]],["Kiribati","122 destinations",[],[["Kiribati",[]]]],["Nicaragua, Tuvalu","125 destinations",[],[["Nicaragua",[]],["Tuvalu",[]]]],["Montenegro, North Macedonia","126 destinations",[],[["Montenegro",[]],["North Macedonia",["macedonia"]]]],["Marshall Islands, Tonga","127 destinations",[],[["Marshall Islands",[]],["Tonga",[]]]],["Honduras, Samoa","129 destinations",[],[["Honduras",[]],["Samoa",[]]]],["Colombia","130 destinations",[],[["Colombia",[]]]],["El Salvador","131 destinations",[],[["El Salvador",[]]]],["Guatemala, Solomon Islands","132 destinations",[],[["Guatemala",[]],["Solomon Islands",[]]]],["Taiwan","134 destinations",[],[["Taiwan",[]]]],["Serbia","135 destinations",[],[["Serbia",[]]]],["Macau, Peru","141 destinations",[],[["Macau",["macao"]],["Peru",[]]]],["Ukraine","142 destinations",[],[["Ukraine",[]]]],["Saint Lucia","144 destinations",[],[["Saint Lucia",["st lucia"]]]],["Dominica, Paraguay, Trinidad and Tobago","145 destinations",[],[["Dominica",[]],["Paraguay",[]],["Trinidad and Tobago",["trinidad"]]]],["Grenada, Mauritius, Panama","147 destinations",[],[["Grenada",[]],["Mauritius",[]],["Panama",[]]]],["Costa Rica","148 destinations",[],[["Costa Rica",[]]]],["Vatican City","151 destinations",[],[["Vatican City",["vatican","holy see"]]]],["Antigua and Barbuda, Seychelles","154 destinations",[],[["Antigua and Barbuda",["antigua"]],["Seychelles",[]]]],["Uruguay","155 destinations",[],[["Uruguay",[]]]],["Mexico","156 destinations",[],[["Mexico",[]]]],["Saint Kitts and Nevis, Saint Vincent and the Grenadines","157 destinations",[],[["Saint Kitts and Nevis",["st kitts","st kitts and nevis","saint kitts"]],["Saint Vincent and the Grenadines",["st vincent","saint vincent","st vincent and the grenadines"]]]],["Bahamas","158 destinations",[],[["Bahamas",["the bahamas"]]]],["Barbados, Brunei","163 destinations",[],[["Barbados",[]],["Brunei",["brunei darussalam"]]]],["Israel, San Marino","166 destinations",[],[["Israel",[]],["San Marino",[]]]],["Argentina, Brazil","168 destinations",[],[["Argentina",[]],["Brazil",["brasil"]]]],["Andorra","169 destinations",[],[["Andorra",[]]]],["Chile, Cyprus, Hong Kong","174 destinations",[],[["Chile",[]],["Cyprus",[]],["Hong Kong",["hongkong","hk"]]]],["Monaco","176 destinations",[],[["Monaco",[]]]],["Bulgaria, Romania","177 destinations",[],[["Bulgaria",[]],["Romania",[]]]],["Iceland, United States","179 destinations",[],[["Iceland",[]],["United States",["usa","us","america","united states of america"]]]],["Liechtenstein, Lithuania","180 destinations",[],[["Liechtenstein",[]],["Lithuania",[]]]],["Croatia, Estonia","181 destinations",[],[["Croatia",["hrvatska"]],["Estonia",[]]]],["Australia, Canada, Czechia, Latvia, New Zealand, Slovakia, Slovenia","182 destinations",[],[["Australia",[]],["Canada",[]],["Czechia",["czech republic","czech"]],["Latvia",[]],["New Zealand",[]],["Slovakia",["slovak republic"]],["Slovenia",[]]]],["Hungary, Malaysia, Poland, United Kingdom","183 destinations",[],[["Hungary",[]],["Malaysia",[]],["Poland",["polska"]],["United Kingdom",["uk","britain","great britain","england"]]]],["Austria, Greece, Malta, Portugal","184 destinations",[],[["Austria",["osterreich"]],["Greece",["hellas"]],["Malta",[]],["Portugal",[]]]],["Belgium, Denmark, Finland, France, Germany, Ireland, Italy, Luxembourg, Netherlands, Norway, Spain, Switzerland","185 destinations",[],[["Belgium",[]],["Denmark",["danmark"]],["Finland",["suomi"]],["France",[]],["Germany",["deutschland"]],["Ireland",[]],["Italy",["italia"]],["Luxembourg",[]],["Netherlands",["holland","the netherlands"]],["Norway",["norge"]],["Spain",["espana"]],["Switzerland",["schweiz","suisse"]]]],["Sweden","186 destinations",[],[["Sweden",["sverige"]]]],["Japan, South Korea, United Arab Emirates","187 destinations",[],[["Japan",[]],["South Korea",["korea","republic of korea"]],["United Arab Emirates",["uae","emirates"]]]],["Singapore","192 destinations",[],[["Singapore",[]]]]]}]);
+BUILTIN.forEach(c => { c.group = "geo"; });
+const CLASSIC = BUILTIN.concat(EXTRA);
+const GROUPS = [["geo", "Geography"], ["lang", "Languages"], ["health", "Health & habits"], ["religion", "Religion"], ["cities", "Cities"], ["custom", "Your lists"]];
+
+const STORE_KEY = "geotension.v1";
+function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; } }
+function saveStore(obj) { try { localStorage.setItem(STORE_KEY, JSON.stringify(Object.assign(loadStore(), obj))); } catch (e) {} }
+
+/* ---------- twist engine: fresh lists from the same country data ---------- */
+const CLUBS = {
+  eu: { phrase: "in the EU", label: "EU", members: "Austria|Belgium|Bulgaria|Croatia|Cyprus|Czechia|Denmark|Estonia|Finland|France|Germany|Greece|Hungary|Ireland|Italy|Latvia|Lithuania|Luxembourg|Malta|Netherlands|Poland|Portugal|Romania|Slovakia|Slovenia|Spain|Sweden" },
+  nato: { phrase: "in NATO", label: "NATO", members: "United States|United Kingdom|France|Canada|Belgium|Netherlands|Luxembourg|Norway|Denmark|Iceland|Italy|Portugal|Greece|Turkey|Germany|Spain|Czechia|Hungary|Poland|Bulgaria|Estonia|Latvia|Lithuania|Romania|Slovakia|Slovenia|Albania|Croatia|Montenegro|North Macedonia|Finland|Sweden" },
+  commonwealth: { phrase: "in the Commonwealth", label: "Commonwealth", members: "Antigua and Barbuda|Australia|Bahamas|Bangladesh|Barbados|Belize|Botswana|Brunei|Cameroon|Canada|Cyprus|Dominica|Eswatini|Fiji|Gabon|Gambia|Ghana|Grenada|Guyana|India|Jamaica|Kenya|Kiribati|Lesotho|Malawi|Malaysia|Maldives|Malta|Mauritius|Mozambique|Namibia|Nauru|New Zealand|Nigeria|Pakistan|Papua New Guinea|Rwanda|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Samoa|Seychelles|Sierra Leone|Singapore|Solomon Islands|South Africa|Sri Lanka|Tanzania|Togo|Tonga|Trinidad and Tobago|Tuvalu|Uganda|United Kingdom|Vanuatu|Zambia" },
+  arab: { phrase: "in the Arab League", label: "Arab League", members: "Algeria|Bahrain|Comoros|Djibouti|Egypt|Iraq|Jordan|Kuwait|Lebanon|Libya|Mauritania|Morocco|Oman|Palestine|Qatar|Saudi Arabia|Somalia|Sudan|Syria|Tunisia|United Arab Emirates|Yemen" },
+  g20: { phrase: "in the G20", label: "G20", members: "Argentina|Australia|Brazil|Canada|China|France|Germany|India|Indonesia|Italy|Japan|Mexico|Russia|Saudi Arabia|South Africa|South Korea|Turkey|United Kingdom|United States" },
+  spanish: { phrase: "in the Spanish-speaking world", label: "Spanish-speaking", members: "Argentina|Bolivia|Chile|Colombia|Costa Rica|Cuba|Dominican Republic|Ecuador|El Salvador|Equatorial Guinea|Guatemala|Honduras|Mexico|Nicaragua|Panama|Paraguay|Peru|Spain|Uruguay|Venezuela" },
+  french: { phrase: "in the French-speaking world", label: "French-speaking", note: "French-speaking means French is an official or working language.", members: "France|Belgium|Switzerland|Luxembourg|Monaco|Canada|Haiti|DR Congo|Republic of the Congo|Côte d'Ivoire|Cameroon|Madagascar|Burkina Faso|Mali|Niger|Senegal|Chad|Guinea|Rwanda|Burundi|Benin|Togo|Central African Republic|Gabon|Djibouti|Comoros|Seychelles|Vanuatu|Equatorial Guinea" },
+  islands: { phrase: "among island nations", label: "Island nations", note: "Island nations are countries made up only of islands; Australia counts as a continent.", members: "Antigua and Barbuda|Bahamas|Bahrain|Barbados|Brunei|Cape Verde|Comoros|Cuba|Cyprus|Dominica|Dominican Republic|Fiji|Grenada|Haiti|Iceland|Indonesia|Ireland|Jamaica|Japan|Kiribati|Madagascar|Maldives|Malta|Marshall Islands|Mauritius|Micronesia|Nauru|New Zealand|Palau|Papua New Guinea|Philippines|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Samoa|São Tomé and Príncipe|Seychelles|Singapore|Solomon Islands|Sri Lanka|Taiwan|Timor-Leste|Tonga|Trinidad and Tobago|Tuvalu|United Kingdom|Vanuatu" },
+  med: { phrase: "on the Mediterranean", label: "Mediterranean", members: "Spain|France|Monaco|Italy|Malta|Slovenia|Croatia|Bosnia and Herzegovina|Montenegro|Albania|Greece|Turkey|Cyprus|Syria|Lebanon|Israel|Palestine|Egypt|Libya|Tunisia|Algeria|Morocco" },
+  equator: { phrase: "on the equator", label: "On the equator", note: "These are the countries the equator passes through.", members: "Ecuador|Colombia|Brazil|São Tomé and Príncipe|Gabon|Republic of the Congo|DR Congo|Uganda|Kenya|Somalia|Maldives|Indonesia|Kiribati" }
+};
+for (const c of Object.values(CLUBS)) c.members = c.members.split("|");
+
+/* calculated measures built from the country data */
+const fmtSmall = (n, d = 1) => n.toLocaleString("en-US", { maximumFractionDigits: d });
+const CALC = {
+  density: { label: "Population density", get: r => r.p != null && r.a ? r.p / r.a : null, fmt: n => fmtSmall(n, n < 10 ? 1 : 0) + " per km²",
+    big: "Most densely populated countries", small: "Least densely populated countries", what: "people per km²",
+    source: "Calculated from UN 2025 population estimates and total area." },
+  tourpc: { label: "Tourists per resident", get: r => r.t != null && r.p ? r.t / r.p : null, fmt: n => fmtSmall(n, n < 1 ? 2 : 1) + " per resident",
+    big: "Most tourists per resident", small: "Fewest tourists per resident", what: "international tourists in 2023 for every person living there",
+    source: "Calculated from UN Tourism 2023 arrivals and UN 2025 population. Countries with no 2023 tourism figure are left out." },
+  capshare: { label: "Share living in the capital", get: r => r.cap && r.p ? Math.min(1, r.cap[1] / r.p) : null, fmt: n => fmtSmall(n * 100, n < 0.1 ? 1 : 0) + "%",
+    big: "Biggest share living in the capital", small: "Smallest share living in the capital", what: "the share of the population living in the capital city", capList: true,
+    source: "Calculated from capital city populations (city limits) and UN 2025 population. City-states count as 100%." },
+  gdpkm: { label: "GDP per km²", get: r => r.g != null && r.a ? r.g * 1e9 / r.a : null,
+    fmt: n => n >= 1e6 ? "$" + fmtSmall(n / 1e6, 1) + " M per km²" : "$" + fmtSmall(Math.round(n / 1000), 0) + "k per km²",
+    big: "Most GDP per km²", small: "Least GDP per km²", what: "economic output (GDP 2025) for every km² of land",
+    source: "Calculated from IMF 2025 GDP and total area." }
+};
+const MET = Object.assign({}, METRICS, CALC);
+
+const NAME_FILTERS = {
+  ia: { label: "ending in -ia", test: n => /ia$/i.test(n) },
+  short: { label: "with names of 5 letters or fewer", test: n => n.replace(/[^A-Za-zÀ-ž]/g, "").length <= 5 },
+  multi: { label: "with names of two or more words", test: n => /\s/.test(n.trim()) }
+};
+const firstLetter = n => n.normalize("NFD").replace(/[̀-ͯ]/g, "").charAt(0).toUpperCase();
+const letterLabel = ls => "starting with " + (ls.length === 1 ? ls : ls.slice(0, -1).split("").join(", ") + " or " + ls.slice(-1));
+
+function scopeRows(scope) {
+  const all = Object.entries(COUNTRIES);
+  if (scope === "world") return all;
+  if (scope.startsWith("cont:")) return all.filter(([, r]) => r.k === scope.slice(5));
+  const club = CLUBS[scope.slice(5)];
+  return all.filter(([n]) => club.members.includes(n));
+}
+const scopePhrase = scope => scope === "world" ? "in the world" : scope.startsWith("cont:") ? "in " + CONTINENTS[scope.slice(5)] : CLUBS[scope.slice(5)].phrase;
+const scopeNote = scope => scope.startsWith("cont:") ? (CONT_NOTE[scope.slice(5)] || "") : scope.startsWith("club:") ? (CLUBS[scope.slice(5)].note || "") : "";
+
+/* builds a playable list from a twist spec, e.g. {scope:"world", metric:"area", dir:"big", filter:"L:CDE"} */
+function makeTwist(spec) {
+  const M = MET[spec.metric];
+  let rows = scopeRows(spec.scope).filter(([, r]) => { const v = M.get(r); return v != null && isFinite(v); });
+  let filterLabel = "";
+  if (spec.filter) {
+    if (spec.filter.startsWith("L:")) { const ls = spec.filter.slice(2); rows = rows.filter(([n]) => ls.includes(firstLetter(n))); filterLabel = letterLabel(ls); }
+    else { const f = NAME_FILTERS[spec.filter]; rows = rows.filter(([n]) => f.test(n)); filterLabel = f.label; }
+  }
+  rows.sort((x, y) => spec.dir === "big" ? M.get(y[1]) - M.get(x[1]) : M.get(x[1]) - M.get(y[1]));
+  const capItems = spec.metric === "cap";
+  const list = rows.map(([name, r]) => capItems
+    ? [r.cap[0], `${M.fmt(M.get(r))} · ${name}`, [...r.cap[2], name, ...(r.al || [])]]
+    : [name, M.fmt(M.get(r)), r.al || []]);
+  const tension = [];
+  for (let rk = 11; rk <= Math.min(14, list.length); rk++) tension.push(rk);
+  const whoPart = filterLabel ? (capItems ? `of countries ${filterLabel}` : filterLabel) : "";
+  /* e.g. "Largest countries · starting with C, D or E" or "Biggest economies in NATO" */
+  const scopeTitle = spec.scope === "world" && filterLabel ? "" : " " + scopePhrase(spec.scope);
+  const filterTitle = filterLabel ? " · " + (capItems ? "countries " : "") + filterLabel.replace(/^with /, "") : "";
+  const title = `${spec.dir === "big" ? M.big : M.small}${scopeTitle}${filterTitle}`;
+  const dirText = spec.dir === "big" ? "largest first" : "smallest first. Number 1 is the smallest, so number 10 is the 10th smallest";
+  return {
+    id: spec.sig, twist: true, spec, title,
+    by: `${M.label.startsWith("GDP") ? M.label : M.label.toLowerCase()} · ${spec.dir === "big" ? "largest" : "smallest"} first`,
+    prompt: `${capItems ? "Capitals" : "Countries"} ${scopePhrase(spec.scope)}${whoPart ? " " + whoPart : ""}, ranked by ${M.what}, ${dirText}. ${scopeNote(spec.scope)}${filterLabel && !capItems ? " Names are as written in English, so Côte d'Ivoire counts under C." : ""}`.replace(/\s+/g, " ").trim(),
+    source: M.source, tension, list
+  };
+}
+
+const pick = a => a[Math.floor(Math.random() * a.length)];
+/* letter sets with enough countries: single letters, or runs of 2–3 letters next to each other in the alphabet */
+function letterSets(rows, min) {
+  const counts = {};
+  rows.forEach(([n]) => { const l = firstLetter(n); counts[l] = (counts[l] || 0) + 1; });
+  const A = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", sets = [];
+  for (let i = 0; i < 26; i++) for (let len = 1; len <= 3 && i + len <= 26; len++) {
+    const ls = A.slice(i, i + len), c = ls.split("").reduce((s, l) => s + (counts[l] || 0), 0);
+    if (c >= min && c <= Math.max(min * 3, 40) && (len === 1 || ls.split("").every(l => counts[l]))) sets.push(ls);
+  }
+  return sets;
+}
+/* a random fresh list from the twist types switched on; avoids signatures in `avoid` */
+function randomTwist(types, avoid) {
+  const baseMetrics = Object.keys(METRICS), calcMetrics = Object.keys(CALC);
+  for (let tries = 0; tries < 80; tries++) {
+    const type = pick(types);
+    const metric = type === "calc" ? pick(calcMetrics) : pick(types.includes("calc") ? baseMetrics.concat(calcMetrics) : baseMetrics);
+    let scope;
+    if (type === "clubs") scope = "club:" + pick(Object.keys(CLUBS));
+    else scope = pick(["world", "world", ...Object.keys(CONTINENTS).map(k => "cont:" + k), ...(types.includes("clubs") ? ["club:" + pick(Object.keys(CLUBS))] : [])]);
+    const dir = Math.random() < 0.55 ? "big" : "small";
+    let filter = "";
+    if (type === "letters" || (types.includes("letters") && type === "calc" && Math.random() < 0.25)) {
+      const M = MET[metric];
+      const rows = scopeRows(scope).filter(([, r]) => { const v = M.get(r); return v != null && isFinite(v); });
+      const roll = Math.random();
+      if (roll < 0.65) { const sets = letterSets(rows, 14); if (!sets.length) continue; filter = "L:" + pick(sets); }
+      else filter = roll < 0.8 ? "ia" : roll < 0.92 ? "short" : "multi";
+    }
+    const spec = { scope, metric, dir, filter };
+    spec.sig = `tw:${scope}:${metric}:${dir}:${filter}`;
+    if (avoid.has(spec.sig)) continue;
+    const cat = makeTwist(spec);
+    if (cat.list.length >= 12) return cat;
+  }
+  return null;
+}
+
+/* hard mode: start the list from the middle, either "from number 11/21" or "right after a given entry" */
+function hardVariant(cat) {
+  const L = cat.list.length, canMid = L >= 24, canAnchor = L >= 20;
+  if (!canMid && !canAnchor) return cat;
+  const mode = canMid && canAnchor ? (Math.random() < 0.5 ? "mid" : "anchor") : canMid ? "mid" : "anchor";
+  let start, title, note;
+  if (mode === "mid") {
+    start = L >= 34 && Math.random() < 0.4 ? 20 : 10;
+    title = `${cat.title}, from number ${start + 1}`;
+    note = `Hard mode: the top ${start} are taken off, so number 1 here is really number ${start + 1} on the full list.`;
+  } else {
+    start = 5 + Math.floor(Math.random() * (L - 14 - 5 + 1));
+    const anchor = cat.list[start - 1][0];
+    title = `${cat.title}, starting after ${anchor}`;
+    note = `Hard mode: the list starts right after ${anchor} (number ${start} on the full list), so number 1 here is the one that comes next.`;
+  }
+  const list = cat.list.slice(start);
+  const tension = [];
+  for (let rk = 11; rk <= Math.min(14, list.length); rk++) tension.push(rk);
+  return Object.assign({}, cat, { id: cat.id + "|hard", baseId: cat.id, hard: mode, title, prompt: note + " " + cat.prompt, list, tension });
+}
+
+/* which lists have been played lately, kept in this browser */
+function playedMap() { const p = loadStore().played; return p && typeof p === "object" ? p : {}; }
+function markPlayed(id) {
+  const p = playedMap(); p[id] = Date.now();
+  const entries = Object.entries(p).sort((a, b) => b[1] - a[1]).slice(0, 600);
+  saveStore({ played: Object.fromEntries(entries) });
+}
+function upgradeCustom(c) {
+  if (c.list) return c;
+  const top = c.top || [], t = c.tension || [];
+  return { id: c.id, custom: true, title: c.title, by: c.by, prompt: c.prompt, source: c.source || "",
+    list: top.concat(t), tension: t.map((_, i) => 11 + i) };
+}
+
+/* ---------- scoring ---------- */
+const STOP = new Set(["the", "lake", "river", "mount", "mt", "mountain", "island", "isle", "sea", "city", "of", "de", "la", "rio"]);
+function norm(s) {
+  const words = String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+  const kept = words.filter(w => !STOP.has(w));
+  return (kept.length ? kept : words).join("");
+}
+/* edit distance where swapping two neighbouring letters counts as one slip */
+function lev(a, b) {
+  if (a === b) return 0;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+    const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+  }
+  return d[a.length][b.length];
+}
+/* returns the 1-based rank of the matched list entry, or 0 */
+/* An entry is [name, figure, aliases] or, when several answers share a place, [names, figure, [], members]
+   with members = [[name, aliases], ...]. Returns the place (1-based) and which member matched. */
+function findMatch(guess, cat) {
+  const g = norm(guess);
+  if (!g) return { rank: 0, member: "" };
+  const keys = [];
+  cat.list.forEach((a, i) => {
+    if (a[3]) a[3].forEach(m => keys.push({ rank: i + 1, member: m[0], ks: [m[0], ...(m[1] || [])].map(norm) }));
+    else keys.push({ rank: i + 1, member: "", ks: [a[0], ...(a[2] || [])].map(norm) });
+  });
+  for (const k of keys) if (k.ks.includes(g)) return { rank: k.rank, member: k.member };
+  const tol = g.length >= 9 ? 2 : g.length >= 5 ? 1 : 0;
+  if (!tol) return { rank: 0, member: "" };
+  let best = null, bestD = 99;
+  keys.forEach(k => k.ks.forEach(key => {
+    if (key.length < 4) return;
+    const d = lev(g, key);
+    if (d < bestD) { bestD = d; best = k; }
+  }));
+  return bestD <= tol ? { rank: best.rank, member: best.member } : { rank: 0, member: "" };
+}
+function findRank(guess, cat) { return findMatch(guess, cat).rank; }
+/* kind: safe (#1-3), hit (#4-10), tension, ext (listed beyond 10), none, dup */
+function judge(text, cat, seen) {
+  const { rank, member } = findMatch(text, cat);
+  const key = rank ? "r" + rank + ":" + member : "t" + norm(text);
+  if (seen.has(key)) return { text, rank, member, kind: "dup", pts: 0 };
+  seen.add(key);
+  if (!rank) return { text, rank: 0, kind: "none", pts: -3, max: cat.list.length };
+  if (rank <= 3) return { text, rank, member, kind: "safe", pts: rank - 4 }; /* #1 −3, #2 −2, #3 −1 */
+  if (rank <= 10) return { text, rank, member, kind: "hit", pts: rank };
+  if (cat.tension.includes(rank)) return { text, rank, member, kind: "tension", pts: -5 };
+  return { text, rank, member, kind: "ext", pts: -3 };
+}
+const onBoard = a => a.kind === "safe" || a.kind === "hit";
+/* reveal steps: step k (1..10) uncovers rank 11-k; step 11 uncovers everything else */
+const isResolved = (a, step) => onBoard(a) ? step >= 11 - a.rank : step >= 11;
+function resultLabel(a) {
+  switch (a.kind) {
+    case "hit": return `#${a.rank} · +${a.rank}`;
+    case "safe": return `#${a.rank} · safe −${4 - a.rank}`;
+    case "tension": return `#${a.rank} · tension −5`;
+    case "ext": return `#${a.rank} · −3`;
+    case "dup": return "repeat · 0";
+    case "timeout": return "no answer · −3";
+    default: return `not in top ${a.max || 10} · −3`;
+  }
+}
+
+/* ---------- spelling suggestions ----------
+   Drawn from a broad geography dictionary plus every list in the deck,
+   so a suggestion never hints at whether an answer is on this round's list. */
+const GAZ = [
+  // countries and territories
+  "Afghanistan|Albania|Algeria|Andorra|Angola|Antigua and Barbuda|Argentina|Armenia|Australia|Austria|Azerbaijan|Bahamas|Bahrain|Bangladesh|Barbados|Belarus|Belgium|Belize|Benin|Bhutan|Bolivia|Bosnia and Herzegovina|Botswana|Brazil|Brunei|Bulgaria|Burkina Faso|Burundi|Cambodia|Cameroon|Canada|Cape Verde|Central African Republic|Chad|Chile|China|Colombia|Comoros|Congo|Costa Rica|Croatia|Cuba|Cyprus|Czechia|Denmark|Djibouti|Dominica|Dominican Republic|DR Congo|Ecuador|Egypt|El Salvador|Equatorial Guinea|Eritrea|Estonia|Eswatini|Ethiopia|Fiji|Finland|France|Gabon|Gambia|Georgia|Germany|Ghana|Greece|Grenada|Guatemala|Guinea|Guinea-Bissau|Guyana|Haiti|Honduras|Hungary|Iceland|India|Indonesia|Iran|Iraq|Ireland|Israel|Italy|Ivory Coast|Jamaica|Japan|Jordan|Kazakhstan|Kenya|Kiribati|Kosovo|Kuwait|Kyrgyzstan|Laos|Latvia|Lebanon|Lesotho|Liberia|Libya|Liechtenstein|Lithuania|Luxembourg|Madagascar|Malawi|Malaysia|Maldives|Mali|Malta|Marshall Islands|Mauritania|Mauritius|Mexico|Micronesia|Moldova|Monaco|Mongolia|Montenegro|Morocco|Mozambique|Myanmar|Namibia|Nauru|Nepal|Netherlands|New Zealand|Nicaragua|Niger|Nigeria|North Korea|North Macedonia|Norway|Oman|Pakistan|Palau|Palestine|Panama|Papua New Guinea|Paraguay|Peru|Philippines|Poland|Portugal|Qatar|Romania|Russia|Rwanda|Saint Kitts and Nevis|Saint Lucia|Saint Vincent and the Grenadines|Samoa|San Marino|Sao Tome and Principe|Saudi Arabia|Senegal|Serbia|Seychelles|Sierra Leone|Singapore|Slovakia|Slovenia|Solomon Islands|Somalia|South Africa|South Korea|South Sudan|Spain|Sri Lanka|Sudan|Suriname|Sweden|Switzerland|Syria|Taiwan|Tajikistan|Tanzania|Thailand|Timor-Leste|Togo|Tonga|Trinidad and Tobago|Tunisia|Turkey|Turkmenistan|Tuvalu|Uganda|Ukraine|United Arab Emirates|United Kingdom|United States|Uruguay|Uzbekistan|Vanuatu|Vatican City|Venezuela|Vietnam|Yemen|Zambia|Zimbabwe|Greenland|Puerto Rico|Western Sahara|Faroe Islands|England|Scotland|Wales",
+  // capitals and big cities
+  "Kabul|Tirana|Algiers|Luanda|Buenos Aires|Yerevan|Canberra|Vienna|Baku|Manama|Dhaka|Minsk|Brussels|Porto-Novo|Thimphu|La Paz|Sucre|Sarajevo|Gaborone|Brasília|Sofia|Ouagadougou|Phnom Penh|Yaoundé|Santiago|Beijing|Bogotá|Kinshasa|Brazzaville|Zagreb|Nicosia|Prague|Copenhagen|Quito|Cairo|Asmara|Tallinn|Addis Ababa|Helsinki|Paris|Libreville|Tbilisi|Berlin|Accra|Athens|Conakry|Georgetown|Budapest|Reykjavík|New Delhi|Jakarta|Tehran|Baghdad|Dublin|Jerusalem|Rome|Tokyo|Amman|Astana|Nairobi|Kuwait City|Bishkek|Vientiane|Riga|Beirut|Maseru|Monrovia|Tripoli|Vilnius|Antananarivo|Lilongwe|Kuala Lumpur|Malé|Bamako|Valletta|Nouakchott|Chișinău|Ulaanbaatar|Podgorica|Rabat|Maputo|Naypyidaw|Windhoek|Kathmandu|Amsterdam|Wellington|Niamey|Abuja|Pyongyang|Skopje|Oslo|Muscat|Islamabad|Lima|Manila|Warsaw|Lisbon|Doha|Bucharest|Moscow|Kigali|Riyadh|Dakar|Belgrade|Freetown|Bratislava|Ljubljana|Mogadishu|Pretoria|Cape Town|Seoul|Juba|Madrid|Colombo|Khartoum|Paramaribo|Stockholm|Bern|Damascus|Taipei|Dushanbe|Dodoma|Bangkok|Lomé|Tunis|Ankara|Ashgabat|Kampala|Kyiv|Abu Dhabi|London|Montevideo|Tashkent|Caracas|Hanoi|Sanaa|Lusaka|Harare|New York|Los Angeles|Chicago|Houston|Phoenix|Philadelphia|San Antonio|San Diego|Dallas|San Francisco|Miami|Boston|Seattle|Toronto|Montreal|Vancouver|Calgary|Edmonton|Guadalajara|Monterrey|Puebla|Tijuana|Ecatepec|Cancún|Santiago de los Caballeros|San Pedro Sula|Mumbai|Shanghai|Istanbul|Lagos|Karachi|São Paulo|Rio de Janeiro|Sydney|Melbourne|Barcelona|Milan|Munich|Hamburg|Valencia|Seville|Aarhus|Odense|Gothenburg|Malmö",
+  // US states and Canadian provinces
+  "Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|Ontario|Quebec|British Columbia|Alberta|Manitoba|Saskatchewan|Nova Scotia|New Brunswick|Newfoundland and Labrador|Prince Edward Island|Yukon|Nunavut|Northwest Territories",
+  // rivers
+  "Danube|Rhine|Elbe|Thames|Seine|Loire|Rhône|Po|Tiber|Vistula|Dnieper|Don|Ural|Ganges|Tigris|Jordan|Zambezi|Orange|Limpopo|Senegal|Ohio|Arkansas|Columbia|Snake|Red River|Orinoco|Uruguay|Magdalena|Irrawaddy|Pearl River|Dniester|Kama|Oka|Pechora|Kolyma|Indigirka|Okavango|Ubangi|Kasai|Nelson|Fraser|Tennessee|Hudson|Delaware|Ebro|Tagus|Douro|Guadalquivir|Oder|Glomma|Amu Darya|Godavari|Krishna|Xi River|Han River|Tarim|Angara|Irtysh|Ob|Lena|Missouri|Mississippi",
+  // lakes
+  "Lake Geneva|Lake Constance|Lake Como|Lake Garda|Loch Ness|Lake Tahoe|Great Salt Lake|Lake Chad|Lake Kivu|Lake Albert|Lake Edward|Lake Tana|Dead Sea|Aral Sea|Lake Maracaibo|Lake Van|Lake Urmia|Vättern|Saimaa|Lake Peipus|Lake Mweru|Lake Nipigon|Lake Manitoba|Lake Winnipegosis|Nettilling Lake|Lake Okeechobee|Lake Champlain|Lake Lucerne|Lake Balaton|Lake Ohrid|Lake Mead|Lake Powell|Lake Volta|Lake Toba|Qinghai Lake|Lake Khanka|Lake Taupo",
+  // mountains
+  "Aconcagua|Denali|Kilimanjaro|Mont Blanc|Matterhorn|Elbrus|Mount Kenya|Mount Fuji|Vinson|Puncak Jaya|Kosciuszko|Mount Rainier|Mount Whitney|Mount Logan|Pico de Orizaba|Chimborazo|Huascarán|Ojos del Salado|Mount Olympus|Zugspitze|Ben Nevis|Galdhøpiggen|Kebnekaise|Mount Ararat|Damavand|Lenin Peak|Ismoil Somoni Peak|Muztagh Ata|Kongur Tagh|Tirich Mir|Nuptse|Ama Dablam|Rakaposhi|Masherbrum|Batura Sar|Kamet|Nanda Devi|Namcha Barwa|Etna|Vesuvius|Teide|Mount St. Helens|Pikes Peak|Mount Cook|Mount Elgon|Mount Stanley|Ngadi Chuli|Saltoro Kangri|Kula Kangri",
+  // islands
+  "Hawaii|Sicily|Sardinia|Corsica|Crete|Zealand|Funen|Gotland|Bornholm|Spitsbergen|Svalbard|Novaya Zemlya|Severny Island|Southampton Island|Melville Island|Axel Heiberg Island|Devon Island|Prince of Wales Island|Vancouver Island|Kyushu|Shikoku|Hainan|Bali|Timor|Long Island|Trinidad|Mallorca|Tenerife|Gran Canaria|Halmahera|Seram|New Britain|Palawan|Bougainville|Zanzibar|Socotra|Tierra del Fuego|Marajó|Chiloé|Sumatra|Java|Luzon|Mindanao|Hokkaido|Sakhalin|Hispaniola|Newfoundland|Tasmania"
+].join("|").split("|");
+let VOCAB = null;
+function buildVocab() {
+  VOCAB = new Map();
+  const add = (k, display) => { const n = norm(k); if (n && (!VOCAB.has(n) || VOCAB.get(n).length > display.length)) VOCAB.set(n, display); };
+  const cats = allCats();
+  cats.forEach(c => c.list.forEach(a => a[3] ? a[3].forEach(m => add(m[0], m[0])) : add(a[0], a[0])));
+  GAZ.forEach(g => add(g, g));
+  const title = s => s.replace(/\b\w/g, ch => ch.toUpperCase());
+  cats.forEach(c => c.list.forEach(a => (a[3] ? a[3].flatMap(m => m[1] || []) : a[2] || []).forEach(x => add(x, title(x)))));
+}
+/* returns a corrected spelling, or "" when the text is already a known name or nothing is close */
+function suggest(text) {
+  if (!VOCAB) buildVocab();
+  const n = norm(text);
+  if (n.length < 4 || VOCAB.has(n)) return "";
+  const tol = n.length >= 11 ? 3 : n.length >= 7 ? 2 : 1;
+  let best = "", bestD = 99;
+  for (const [k, display] of VOCAB) {
+    if (k.length < 3 || Math.abs(k.length - n.length) > tol) continue;
+    const d = lev(n, k);
+    if (d < bestD) { bestD = d; best = display; }
+  }
+  return bestD <= tol ? best : "";
+}
+
+/* ---------- state ---------- */
+let S;
+function classicCats() { return CLASSIC.concat((S && S.custom) || []); }
+function allCats() { return classicCats().concat(GEN); }
+function catById(id) { return (S && S.gen && S.gen[id]) || allCats().find(c => c.id === id); }
+/* every list id the current setup would draw from */
+/* twist types in use: none when twists are switched off; all three if on but none picked */
+function twistTypes() {
+  const su = S.setup;
+  if (!su.twistsOn) return [];
+  return su.twists.length ? su.twists : ["letters", "clubs", "calc"];
+}
+function poolIds() {
+  const su = S.setup;
+  const classic = su.selected.filter(id => classicCats().some(c => c.id === id));
+  const gen = GEN.filter(c => su.conts.includes(c.cont) && su.measures.includes(c.metric) && su.dirs.includes(c.dir)).map(c => c.id);
+  return classic.concat(gen);
+}
+const DEFAULT_DECK = { conts: Object.keys(CONTINENTS), measures: Object.keys(METRICS), dirs: ["big", "small"] };
+function init() {
+  const st = loadStore();
+  const custom = (Array.isArray(st.custom) ? st.custom : []).map(upgradeCustom);
+  const ids = CLASSIC.map(c => c.id).concat(custom.map(c => c.id));
+  return {
+    phase: "setup",
+    custom,
+    setup: { count: st.count || 2, names: st.names || ["Player 1", "Player 2", "Player 3", "Player 4"], rounds: 5, guesses: 1, timer: st.timer || 0, selected: ids,
+      conts: (st.deck || DEFAULT_DECK).conts, measures: (st.deck || DEFAULT_DECK).measures, dirs: (st.deck || DEFAULT_DECK).dirs,
+      twists: Array.isArray(st.twists) ? st.twists : ["letters", "clubs", "calc"], twistsOn: st.twistsOn !== false, hard: !!st.hard },
+    ui: { customOpen: false, customErr: "" },
+    players: [], queue: [], roundIdx: 0, round: null
+  };
+}
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+function startGame(keepPlayers) {
+  const su = S.setup;
+  if (!keepPlayers) {
+    S.players = su.names.slice(0, su.count).map((n, i) => ({ name: (n || "").trim() || `Player ${i + 1}`, color: i + 1, total: 0, rounds: [] }));
+    saveStore({ count: su.count, names: su.names });
+  } else S.players.forEach(p => { p.total = 0; p.rounds = []; });
+  const pool = poolIds();
+  saveStore({ deck: { conts: su.conts, measures: su.measures, dirs: su.dirs }, twists: su.twists, twistsOn: su.twistsOn, hard: su.hard });
+  const types = twistTypes();
+  /* lists you haven't played come first, then the ones played longest ago */
+  const played = playedMap();
+  const ordered = shuffle(pool).sort((a, b) => (played[a] || 0) - (played[b] || 0));
+  const recent = new Set(Object.keys(played).filter(k => k.startsWith("tw:") && Date.now() - played[k] < 60 * 864e5));
+  S.gen = {}; S.queue = [];
+  let fi = 0, twistTurn = Math.random() < 0.5;
+  for (let i = 0; i < su.rounds; i++) {
+    const canFixed = fi < ordered.length, canTwist = types.length > 0;
+    let id = null;
+    if (canTwist && (twistTurn || !canFixed)) {
+      const c = randomTwist(types, recent);
+      if (c) { recent.add(c.id); S.gen[c.id] = c; id = c.id; }
+    }
+    if (!id && canFixed) id = ordered[fi++];
+    if (!id) break;
+    S.queue.push(id);
+    twistTurn = !twistTurn;
+  }
+  S.roundIdx = 0;
+  startRound();
+}
+function startRound() {
+  const n = S.players.length;
+  let id = S.queue[S.roundIdx];
+  markPlayed(id);
+  if (S.setup.hard) {
+    const base = catById(id), h = hardVariant(base);
+    if (h !== base) { S.gen = S.gen || {}; S.gen[h.id] = h; id = h.id; }
+  }
+  S.round = { catId: id, order: Array.from({ length: n }, (_, k) => (S.roundIdx + k) % n), turn: 0, answers: Array(n).fill(null), step: 0 };
+  S.phase = "handoff";
+}
+const curPlayer = () => S.round.order[S.round.turn];
+function lockIn(texts) {
+  const r = S.round, cat = catById(r.catId), seen = new Set();
+  const judged = texts.map(t => t.trim()).filter(Boolean).map(t => judge(t, cat, seen));
+  /* no usable answer when time ran out costs the same as a wrong answer */
+  r.answers[curPlayer()] = judged.length ? judged : [{ text: "Time ran out", rank: 0, kind: "timeout", pts: -3 }];
+  r.turn++;
+  if (r.turn >= S.players.length) { S.phase = "reveal"; r.step = 0; }
+  else S.phase = "handoff";
+}
+/* players who named #10, the perfect answer */
+function perfectBy() {
+  const r = S.round;
+  return S.players.map((_, i) => i).filter(i => (r.answers[i] || []).some(a => a.kind === "hit" && a.rank === 10));
+}
+/* −2 for everyone who missed #10 when someone else found it; applies once #10 is revealed */
+function perfectPenalty(i, step) {
+  if (step < 1) return 0;
+  const by = perfectBy();
+  return by.length && !by.includes(i) ? -2 : 0;
+}
+function roundPoints(i, step) {
+  const r = S.round;
+  return (r.answers[i] || []).reduce((s, a) => s + (isResolved(a, step) ? a.pts : 0), 0) + perfectPenalty(i, step);
+}
+function beginEntry() {
+  const r = S.round, n = S.setup.guesses;
+  r.draft = Array(n).fill(""); r.kept = Array(n).fill(""); r.entryErr = "";
+  r.deadline = S.setup.timer ? Date.now() + S.setup.timer * 1000 : 0;
+  r.timedOut = false;
+  S.phase = "entry";
+}
+function revealStep(all) {
+  const r = S.round;
+  r.step = all ? 11 : Math.min(11, r.step + 1);
+  if (r.step >= 11) {
+    S.players.forEach((p, i) => { const pts = roundPoints(i, 11); p.rounds.push(pts); p.total += pts; });
+    S.phase = "roundEnd";
+  }
+}
+function nextRound() {
+  S.roundIdx++;
+  if (S.roundIdx >= S.queue.length) S.phase = "final";
+  else startRound();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/* ---------- render ---------- */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pc = i => `--pc: var(--p${S.players[i].color})`;
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
+const worth = rank => rank <= 3 ? "−" + (4 - rank) : "+" + rank;
+
+function render() { renderMain(); renderSide(); }
+function renderMain() {
+  const el = document.getElementById("main");
+  const ph = S.phase;
+  el.innerHTML = ph === "setup" ? setupHTML() : ph === "final" ? finalHTML() : ph === "handoff" ? handoffHTML() : ph === "entry" ? entryHTML() : revealHTML();
+  if (ph === "entry") { const inp = document.getElementById("ans-0"); if (inp) inp.focus({ preventScroll: true }); }
+}
+
+function setupHTML() {
+  const su = S.setup, cats = classicCats();
+  const pool = poolIds();
+  const twOn = twistTypes().length > 0;
+  const maxRounds = twOn ? 30 : Math.max(1, pool.length);
+  const played = playedMap(), fresh = pool.filter(id => !played[id]).length, playable = pool.length > 0 || twOn;
+  if (su.rounds > maxRounds) su.rounds = maxRounds;
+  const genCount = pool.length - su.selected.filter(id => classicCats().some(c => c.id === id)).length;
+  const chipGroup = (group, items, label) => `
+    <div class="pickrow"><span class="pick-label">${label}</span><div class="picks" role="group" aria-label="${label}">
+      ${items.map(([v, l]) => `<button type="button" class="pick" data-act="tog" data-group="${group}" data-v="${v}" aria-pressed="${su[group].includes(v)}">${l}</button>`).join("")}
+    </div></div>`;
+  const names = su.names.slice(0, su.count).map((n, i) => `
+    <label class="pname"><span class="dot" style="background: var(--p${i + 1})"></span>
+      <input type="text" id="pname-${i}" data-name="${i}" value="${esc(n)}" maxlength="18" aria-label="Name of player ${i + 1}"></label>`).join("");
+  const catCard = c => `
+    <label class="cat"><input type="checkbox" id="cat-${esc(c.id)}" data-cat="${esc(c.id)}" ${su.selected.includes(c.id) ? "checked" : ""}>
+      <span><b>${esc(c.title)}</b><small>${esc(c.by)} · ranked to #${c.list.length}</small></span>
+      ${c.custom ? `<button class="del" type="button" data-act="delcat" data-id="${esc(c.id)}">Remove</button>` : ""}
+    </label>`;
+  const catList = GROUPS.map(([g, label]) => {
+    const inGroup = cats.filter(c => (c.custom ? "custom" : c.group) === g);
+    if (!inGroup.length) return "";
+    const on = inGroup.filter(c => su.selected.includes(c.id)).length;
+    return `<div class="catgroup">
+      <div class="catgroup-h"><span class="label">${label}</span><span class="hint">${on} of ${inGroup.length}</span>
+        <span class="grp-btns"><button type="button" class="linkbtn" data-act="grp" data-g="${g}" data-on="1">All</button><button type="button" class="linkbtn" data-act="grp" data-g="${g}" data-on="0">None</button></span></div>
+      <div class="cats">${inGroup.map(catCard).join("")}</div></div>`;
+  }).join("");
+  const toggle = (act, on, title, text, cls = "") => `
+    <div class="toggle-row ${cls} ${on ? "on" : ""}">
+      <div class="toggle-text"><b>${title}</b><span class="hint">${text}</span></div>
+      <button type="button" class="switch" role="switch" aria-checked="${on}" aria-label="${title}" data-act="${act}"><span class="knob"></span><span class="switch-label">${on ? "On" : "Off"}</span></button>
+    </div>`;
+  const advanced = S.ui.advanced ? `
+  <section class="panel stack" id="advanced">
+    <div class="row" style="justify-content: space-between">
+      <h2 class="label">Advanced settings</h2>
+      <span class="hint">${pool.length} lists${twOn ? " plus random twists" : ""}</span>
+    </div>
+    <div class="deck-block stack">
+      <h3 class="deck-h">Twist types</h3>
+      ${chipGroup("twists", [["letters", "Name filters"], ["clubs", "Clubs"], ["calc", "New measures"]], "Use")}
+      <p class="hint">Name filters pick countries by letter or name shape. Clubs are the EU, NATO, the Commonwealth, the Arab League, the G20, Spanish- and French-speaking countries, island nations, the Mediterranean and the equator. New measures are population density, tourists per resident, share living in the capital and GDP per km².</p>
+    </div>
+    <div class="deck-block stack">
+      <div class="row" style="justify-content: space-between"><h3 class="deck-h">Continent lists</h3><span class="hint">${genCount} lists</span></div>
+      ${chipGroup("conts", Object.entries(CONTINENTS), "Continents")}
+      ${chipGroup("measures", Object.entries(METRICS).map(([k, m]) => [k, m.label]), "Ranked by")}
+      ${chipGroup("dirs", [["big", "Largest first"], ["small", "Smallest first"]], "Order")}
+      <p class="hint">"Smallest first" flips a list, so number 1 is the smallest and number 10 is the 10th smallest. Oceania has too few tourism figures for a tourist list.</p>
+    </div>
+    <div class="deck-block stack">
+      <h3 class="deck-h">World lists</h3>
+      ${catList}
+      ${S.ui.customOpen ? customFormHTML() : `<div><button class="btn small" type="button" data-act="opencustom">+ Add your own list</button></div>`}
+    </div>
+    <div class="deck-block stack">
+      <h3 class="deck-h">Played lists</h3>
+      <p class="hint">${fresh} of ${pool.length} lists haven't been played on this device yet, and they come first.${Object.keys(played).length ? ` <button type="button" class="linkbtn" data-act="resethist">Forget what we've played</button>` : ""}</p>
+    </div>
+  </section>` : "";
+  return `
+  <section class="panel stack">
+    <div class="row" style="justify-content: space-between">
+      <h2 class="label">Players</h2>
+      <div class="seg" role="group" aria-label="Number of players">
+        ${[1, 2, 3, 4].map(n => `<button type="button" data-act="count" data-n="${n}" aria-pressed="${su.count === n}">${n}</button>`).join("")}
+      </div>
+    </div>
+    <div class="names">${names}</div>
+  </section>
+  <section class="panel stack">
+    <h2 class="label">Game</h2>
+    <div class="settings">
+      <div class="stepper"><span>Rounds</span><span class="ctl">
+        <button type="button" data-act="rounds" data-d="-1" aria-label="Fewer rounds">−</button>
+        <span class="num">${su.rounds}</span>
+        <button type="button" data-act="rounds" data-d="1" aria-label="More rounds">+</button></span></div>
+    </div>
+    <div class="row" style="justify-content: space-between">
+      <span>Answer timer</span>
+      <div class="seg" role="group" aria-label="Answer timer">
+        ${[[0, "No timer"], [60, "Easy 60s"], [30, "Medium 30s"], [15, "Hard 15s"]].map(([t, l]) => `<button type="button" data-act="timer" data-t="${t}" aria-pressed="${su.timer === t}">${l}</button>`).join("")}
+      </div>
+    </div>
+    ${toggle("twistsOn", twOn, "Random twists", "Every other round is a brand-new list, like <i>Largest countries starting with C, D or E</i>.")}
+    ${toggle("hard", su.hard, "Hard mode", "Lists start from number 11 or 21, or right after a random entry, so the obvious answers are gone.", "hard")}
+  </section>
+  <div class="row" style="justify-content: space-between">
+    <button type="button" class="linkbtn" data-act="adv" aria-expanded="${!!S.ui.advanced}">${S.ui.advanced ? "Hide advanced settings" : "Advanced settings"}</button>
+    <div class="row end">
+      ${playable ? "" : `<p class="err">Turn on random twists or pick some lists in Advanced settings.</p>`}
+      <button class="btn primary big" type="button" data-act="start" ${playable ? "" : "disabled"}>Start game</button>
+    </div>
+  </div>
+  ${advanced}`;
+}
+
+function customFormHTML() {
+  return `
+  <form class="stack" id="custom-form" style="border-top: 1px solid var(--line); padding-top: 16px">
+    <div class="settings">
+      <label class="stack" style="gap:6px"><span class="label">Title</span><input type="text" id="c-title" placeholder="Largest cities in Spain" required></label>
+      <label class="stack" style="gap:6px"><span class="label">Ranked by</span><input type="text" id="c-by" placeholder="by population"></label>
+    </div>
+    <label class="stack" style="gap:6px"><span class="label">The full ranking, number 1 first (at least 10 lines)</span>
+      <textarea id="c-list" rows="14" placeholder="Madrid / 3.4 M&#10;Barcelona / 1.7 M&#10;Valencia / 0.8 M&#10;…&#10;*Valladolid / 0.30 M&#10;*Vigo / 0.29 M&#10;Gijón / 0.27 M"></textarea></label>
+    <p class="hint">One answer per line. Start a line with <code>*</code> to make it a tension answer (only below number 10). After the answer you can add a figure and other accepted spellings, separated by slashes: <code>Seville / 0.69 M / sevilla</code>.</p>
+    ${S.ui.customErr ? `<p class="err">${esc(S.ui.customErr)}</p>` : ""}
+    <div class="row end">
+      <button class="btn" type="button" data-act="closecustom">Cancel</button>
+      <button class="btn primary" type="submit">Save list</button>
+    </div>
+  </form>`;
+}
+
+function headHTML(cat) {
+  return `
+  <section class="round-head">
+    <p class="eyebrow">Round ${S.roundIdx + 1} of ${S.queue.length} · ${esc(cat.by)}${cat.twist ? ' <span class="badge">Twist</span>' : ""}${cat.hard ? ' <span class="badge hard">Hard mode</span>' : ""}</p>
+    <h2>${esc(cat.title)}</h2>
+    <p class="prompt">${esc(cat.prompt || "")}</p>
+  </section>`;
+}
+
+function handoffHTML() {
+  const r = S.round, p = curPlayer(), cat = catById(r.catId);
+  return `
+  ${headHTML(cat)}
+  <section class="panel cover stack" style="${pc(p)}">
+    <p class="eyebrow">Answer ${r.turn + 1} of ${S.players.length}</p>
+    <div class="cover-name">${esc(S.players[p].name)}</div>
+    <p class="hint">Hand the screen to ${esc(S.players[p].name)}. Everyone else, look away until they lock in.</p>
+    <div><button class="btn primary big" type="button" data-act="begin">I'm ${esc(S.players[p].name)}, let me answer</button></div>
+  </section>`;
+}
+
+function entryHTML() {
+  const r = S.round, p = curPlayer(), cat = catById(r.catId), n = S.setup.guesses;
+  const inputs = Array.from({ length: n }, (_, k) => `
+    <div class="entry-row single">
+      <input type="text" id="ans-${k}" data-ans="${k}" value="${esc(r.draft[k] || "")}" placeholder="Your answer" aria-label="Your answer" autocomplete="off" autocapitalize="words" spellcheck="false">
+      <div class="sugg" id="sug-${k}" aria-live="polite">${suggHTML(k)}</div></div>`).join("");
+  const others = r.answers.filter(Boolean).length;
+  const timer = r.deadline ? `<div class="timer" id="timer" style="--t: ${S.setup.timer}"><span class="secs" id="timer-secs">${secsLeft()}</span><span class="bar"><span id="timer-bar" style="width: ${100 * secsLeftExact() / S.setup.timer}%"></span></span></div>` : "";
+  return `
+  ${headHTML(cat)}
+  <form class="panel turn stack" id="entry-form" style="${pc(p)}" autocomplete="off">
+    <div class="who-now"><span class="name">${esc(S.players[p].name)}</span><span class="hint">write your answer in secret</span></div>
+    ${timer}
+    <div class="entry-list">${inputs}</div>
+    <p class="hint">${others ? `${others === 1 ? "One player has" : `${others} players have`} already answered, and you can't pick the same answer. ` : ""}Nothing is checked until everyone has answered${r.deadline ? ". If time runs out with nothing typed in, you get −3" : ""}.</p>
+    ${r.entryErr ? `<p class="err">${esc(r.entryErr)}</p>` : ""}
+    <div class="row end"><button class="btn primary big" type="submit">Lock in my answer</button></div>
+  </form>
+  <section class="panel stack">
+    <span class="label">What each place is worth</span>
+    <div class="ladder big">${Array.from({ length: 10 }, (_, i) => `<span style="--h: var(--h${i + 1})"><b>#${i + 1}</b><em>${worth(i + 1)}${i === 9 ? "★" : ""}</em></span>`).join("")}</div>
+    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2. Tension answers just outside the top 10 cost −5. Anything else costs −3.</p>
+  </section>`;
+}
+/* a suggestion is pending when the text has a close known spelling the player hasn't kept on purpose */
+function pendingSugg(k) {
+  const r = S.round, t = (r.draft[k] || "").trim();
+  if (!t || r.kept[k] === norm(t)) return "";
+  return suggest(t);
+}
+function suggHTML(k) {
+  const s = pendingSugg(k);
+  if (!s) return "";
+  return `<span>Did you mean <b>${esc(s)}</b>?</span>
+    <button type="button" class="btn small primary" data-act="usesugg" data-k="${k}" data-v="${esc(s)}">Use ${esc(s)}</button>
+    <button type="button" class="btn small" data-act="keepsugg" data-k="${k}">Keep mine</button>`;
+}
+const secsLeftExact = () => Math.max(0, (S.round.deadline - Date.now()) / 1000);
+const secsLeft = () => Math.ceil(secsLeftExact());
+
+function revealHTML() {
+  const r = S.round, cat = catById(r.catId), done = S.phase === "roundEnd", step = r.step;
+  const slots = cat.list.slice(0, 10).map((a, i) => {
+    const rank = i + 1, open = step >= 11 - rank;
+    const who = S.players.map((_, pi) => pi).filter(pi => (r.answers[pi] || []).some(x => onBoard(x) && x.rank === rank));
+    const end = !open ? `worth <span class="worth">${worth(rank)}</span>`
+      : who.length ? who.map(pi => {
+          const m = a[3] ? (r.answers[pi] || []).find(x => onBoard(x) && x.rank === rank)?.member : "";
+          return `<span class="pchip" style="${pc(pi)}"><span class="dot"></span>${esc(S.players[pi].name)}${m ? ` · ${esc(m)}` : ""} <span class="plus">${worth(rank)}</span></span>`;
+        }).join("")
+      : `<span class="nobody">nobody</span>`;
+    const perfectNote = rank === 10 && open && who.length ? `<span class="perfect-note">★ Perfect answer · everyone else −2</span>` : "";
+    return `<li class="slot ${open ? "open" : ""} ${open && who.length ? "found" : ""} ${open && step === 11 - rank ? "pop" : ""}" style="--h: var(--h${rank}); ${who.length === 1 ? pc(who[0]) : "--pc: var(--accent)"}">
+      <span class="band"></span><span class="rk">${rank}</span>
+      <span class="ans">${open ? `<b>${esc(a[0])}</b>${a[1] ? `<small>${esc(a[1])}</small>` : ""}` : `<span class="hid"></span>`}</span>
+      <span class="end">${end}${perfectNote}</span></li>`;
+  }).join("");
+
+  const pBy = perfectBy();
+  const cards = S.players.map((pl, pi) => {
+    const ans = r.answers[pi] || [];
+    const items = ans.length ? ans.map(a => {
+      const res = isResolved(a, step);
+      const shown = res && a.rank ? (a.member || cat.list[a.rank - 1][0]) : a.text;
+      return `<li><span class="g">${esc(a.text)}${res && a.rank && norm(shown) !== norm(a.text) ? `<small>= ${esc(shown)}</small>` : ""}</span>
+        <span class="res ${res ? a.kind : "pending"}">${res ? resultLabel(a) : "?"}</span></li>`;
+    }).join("") : `<li><span class="g hint">No answers</span><span class="res pending">0</span></li>`;
+    const pen = perfectPenalty(pi, step) ? `<li class="perfect"><span class="g">${esc(pBy.map(x => S.players[x].name).join(" and "))} found the perfect answer</span><span class="res tension">−2</span></li>` : "";
+    return `<div class="acard" style="${pc(pi)}"><div class="acard-h"><span>${esc(pl.name)}</span><span class="v">${signed(roundPoints(pi, step))}</span></div><ol>${items}${pen}</ol></div>`;
+  }).join("");
+
+  const nextLabel = step < 10 ? `Reveal #${10 - step}` : "Reveal tension and other answers";
+  const controls = done ? `
+    <div class="row end">
+      <button class="btn primary big" type="button" data-act="next">${S.roundIdx + 1 >= S.queue.length ? "See final results" : "Next round"}</button>
+    </div>` : `
+    <div class="row end">
+      <button class="btn" type="button" data-act="revealall">Reveal everything</button>
+      <button class="btn primary big" type="button" data-act="reveal">${nextLabel}</button>
+    </div>`;
+
+  const more = done ? `
+    <section class="panel stack">
+      <div class="tension-list"><span class="label">Tension answers</span>${cat.tension.map(rk => `<span class="chip t">#${rk} ${esc(cat.list[rk - 1][0])}</span>`).join("")}</div>
+      ${cat.list.length > 10 ? `<details class="more"><summary>The rest of the list, #11 to #${cat.list.length}</summary>
+        <ol class="rest" start="11">${cat.list.slice(10).map((a, i) => `<li class="${cat.tension.includes(i + 11) ? "t" : ""}"><span>${esc(a[0])}</span><small>${esc(a[1] || "")}</small></li>`).join("")}</ol></details>` : ""}
+      ${cat.source ? `<p class="source">Source: ${esc(cat.source)}</p>` : ""}
+    </section>` : "";
+
+  return `
+  ${headHTML(cat)}
+  <section class="panel stack">
+    <div class="row" style="justify-content: space-between">
+      <span class="label">${done ? `Round ${S.roundIdx + 1} done` : step === 0 ? "Everyone has answered" : step <= 10 ? `Revealed down to #${11 - step}` : ""}</span>
+    </div>
+    <div class="answers">${cards}</div>
+    ${controls}
+  </section>
+  <ol class="board" aria-label="Top 10">${slots}</ol>
+  ${more}`;
+}
+
+function standings() { return S.players.map((p, i) => ({ p, i })).sort((a, b) => b.p.total - a.p.total); }
+
+function finalHTML() {
+  const st = standings(), top = st[0].p.total;
+  const winners = st.filter(x => x.p.total === top), solo = S.players.length === 1;
+  const headline = solo ? `${S.players[0].total} points` : winners.length > 1 ? "It's a tie" : `${winners[0].p.name} wins`;
+  return `
+  <section class="panel stack winner" style="${pc(winners[0].i)}">
+    <p class="eyebrow">Game over · ${S.queue.length} rounds</p>
+    <div class="crown">${esc(headline)}</div>
+    <p class="hint">${solo ? `Over ${S.queue.length} rounds.` : winners.length > 1 ? `${winners.map(w => esc(w.p.name)).join(" and ")} share the top with ${top} points.` : `with ${top} points.`}</p>
+    <div class="podium">${st.map((x, k) => `
+      <div class="score" style="${pc(x.i)}"><span class="pos">${k + 1}</span><span class="dot"></span>
+      <span class="nm">${esc(x.p.name)}</span><span class="tot">${x.p.total}</span></div>`).join("")}</div>
+    <div class="row end">
+      <button class="btn" type="button" data-act="newgame">Change players or lists</button>
+      <button class="btn primary big" type="button" data-act="again">Play again</button>
+    </div>
+  </section>`;
+}
+
+function renderSide() {
+  const el = document.getElementById("side");
+  if (S.phase === "setup") {
+    el.innerHTML = `
+    <section class="panel stack">
+      <h2>How to score</h2>
+      <ul class="rules">
+        <li><span class="k hit">+N</span><span>Name number 4 to 10 and you score its place. Number 8 is worth 8 points.</span></li>
+        <li><span class="k hit">★</span><span>Number 10 is the perfect answer. Name it and every other player loses 2.</span></li>
+        <li><span class="k m">−3…−1</span><span>Numbers 1, 2 and 3 are the safe answers: number 1 costs 3, number 2 costs 2 and number 3 costs 1.</span></li>
+        <li><span class="k t">−5</span><span>Tension answers just miss the top 10. Each list hides a few.</span></li>
+        <li><span class="k m">−3</span><span>Anything else. If it's further down the list, you'll see its place.</span></li>
+      </ul>
+      <div><span class="label">The board, summit to lowland</span>
+        <div class="ladder scored">${Array.from({ length: 10 }, (_, i) => `<div class="step"><i style="--h: var(--h${i + 1})">${i + 1}</i><em class="${i < 3 ? "neg" : "pos"}">${worth(i + 1)}${i === 9 ? "<b>★</b>" : ""}</em></div>`).join("")}</div></div>
+      <p class="hint">Each player writes one answer in secret, passing the screen around. No two players can pick the same answer, so going later in the round is harder. When everyone is done, the list is revealed from number 10 up to number 1. Misspelled answers get a "did you mean" before you lock in.</p>
+    </section>`;
+    return;
+  }
+  const r = S.round, ph = S.phase;
+  const live = ph === "reveal";
+  const st = S.players.map((p, i) => ({ p, i, t: p.total + (live ? roundPoints(i, r.step) : 0) })).sort((a, b) => b.t - a.t);
+  const scores = st.map((x, k) => {
+    let sub = "";
+    if (ph === "handoff" || ph === "entry") {
+      const idx = r.order.indexOf(x.i);
+      sub = r.answers[x.i] ? "answers locked in" : idx === r.turn ? (ph === "entry" ? "answering now" : "up next") : "waiting";
+    } else if (live) sub = `this round ${signed(roundPoints(x.i, r.step))}`;
+    else if (x.p.rounds.length) sub = `last round ${signed(x.p.rounds[x.p.rounds.length - 1])}`;
+    const now = (ph === "handoff" || ph === "entry") && curPlayer() === x.i;
+    return `<li class="score ${now ? "now" : ""}" style="${pc(x.i)}">
+      <span class="pos">${k + 1}</span><span class="dot"></span>
+      <span class="nm">${esc(x.p.name)}${sub ? `<small>${sub}</small>` : ""}</span>
+      <span class="tot">${x.t}</span></li>`;
+  }).join("");
+  const played = S.players[0].rounds.length;
+  const hist = played ? `
+    <div class="hist-wrap"><table class="hist">
+      <thead><tr><th>Round</th>${S.players.map((p, i) => `<th style="${pc(i)}; color: var(--pc)">${esc(p.name.slice(0, 6))}</th>`).join("")}</tr></thead>
+      <tbody>${Array.from({ length: played }, (_, k) => `<tr><td>${k + 1}. ${esc(catById(S.queue[k])?.title || "")}</td>${S.players.map(p => `<td>${signed(p.rounds[k])}</td>`).join("")}</tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td>${S.players.map(p => `<td>${p.total}</td>`).join("")}</tr></tfoot>
+    </table></div>` : `<p class="hint">Round results appear here after each round.</p>`;
+  el.innerHTML = `
+  <section class="panel stack">
+    <div class="row" style="justify-content: space-between; align-items: baseline">
+      <h2>Scoreboard</h2><span class="eyebrow">${ph === "final" ? "Final" : `Round ${S.roundIdx + 1}/${S.queue.length}`}</span>
+    </div>
+    <ol class="scores">${scores}</ol>
+    ${hist}
+  </section>
+  ${ph !== "final" ? `<div><button class="btn small" type="button" data-act="quit">End game and return to setup</button></div>` : ""}`;
+}
+
+function parseLines(text) {
+  return text.split("\n").map(l => l.trim()).filter(Boolean).map(l => {
+    const tension = l.startsWith("*");
+    const parts = l.replace(/^\*\s*/, "").split("/").map(x => x.trim()).filter(Boolean);
+    let val = "", aliases = parts.slice(1);
+    if (aliases.length && /\d/.test(aliases[0])) { val = aliases[0]; aliases = aliases.slice(1); }
+    return { entry: [parts[0], val, aliases], tension };
+  });
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]");
+  if (!b) return;
+  const act = b.dataset.act, su = S.setup;
+  if (act === "count") su.count = +b.dataset.n;
+  else if (act === "rounds") su.rounds = Math.min(twistTypes().length ? 30 : Math.max(1, poolIds().length), Math.max(1, su.rounds + +b.dataset.d));
+  else if (act === "grp") {
+    const ids = classicCats().filter(c => (c.custom ? "custom" : c.group) === b.dataset.g).map(c => c.id);
+    su.selected = su.selected.filter(id => !ids.includes(id));
+    if (b.dataset.on === "1") su.selected = su.selected.concat(ids);
+  }
+  else if (act === "tog") {
+    const g = b.dataset.group, v = b.dataset.v;
+    su[g] = su[g].includes(v) ? su[g].filter(x => x !== v) : su[g].concat(v);
+  }
+  else if (act === "guesses") su.guesses = Math.min(6, Math.max(1, su.guesses + +b.dataset.d));
+  else if (act === "opencustom") { S.ui.customOpen = true; S.ui.customErr = ""; }
+  else if (act === "closecustom") S.ui.customOpen = false;
+  else if (act === "delcat") {
+    e.preventDefault();
+    S.custom = S.custom.filter(c => c.id !== b.dataset.id);
+    su.selected = su.selected.filter(id => id !== b.dataset.id);
+    saveStore({ custom: S.custom });
+  }
+  else if (act === "start") { if (!poolIds().length && !twistTypes().length) return; startGame(false); }
+  else if (act === "twistsOn") { su.twistsOn = !su.twistsOn; saveStore({ twistsOn: su.twistsOn }); }
+  else if (act === "adv") { S.ui.advanced = !S.ui.advanced; }
+  else if (act === "hard") { su.hard = !su.hard; saveStore({ hard: su.hard }); }
+  else if (act === "resethist") saveStore({ played: {} });
+  else if (act === "timer") { su.timer = +b.dataset.t; saveStore({ timer: su.timer }); }
+  else if (act === "begin") beginEntry();
+  else if (act === "usesugg" || act === "keepsugg") {
+    const k = +b.dataset.k, r = S.round;
+    if (act === "usesugg") { r.draft[k] = b.dataset.v; const inp = document.getElementById("ans-" + k); if (inp) inp.value = b.dataset.v; }
+    else r.kept[k] = norm(r.draft[k] || "");
+    const box = document.getElementById("sug-" + k); if (box) box.innerHTML = "";
+    const next = document.getElementById("ans-" + (k + 1)); (next || document.getElementById("ans-" + k))?.focus();
+    return;
+  }
+  else if (act === "reveal") revealStep(false);
+  else if (act === "revealall") revealStep(true);
+  else if (act === "next") nextRound();
+  else if (act === "again") startGame(true);
+  else if (act === "newgame" || act === "quit") S.phase = "setup";
+  render();
+});
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.name !== undefined) S.setup.names[+t.dataset.name] = t.value;
+  if (t.dataset && t.dataset.ans !== undefined && S.phase === "entry") {
+    const k = +t.dataset.ans;
+    S.round.draft[k] = t.value;
+    clearTimeout(suggTimers[k]);
+    suggTimers[k] = setTimeout(() => { const box = document.getElementById("sug-" + k); if (box && S.phase === "entry") box.innerHTML = suggHTML(k); }, 350);
+  }
+});
+const suggTimers = {};
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset && t.dataset.cat) {
+    const id = t.dataset.cat, sel = S.setup.selected;
+    S.setup.selected = t.checked ? sel.concat(id) : sel.filter(x => x !== id);
+    render();
+  }
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  if (e.target.id === "entry-form") {
+    const r = S.round;
+    Array.from({ length: S.setup.guesses }, (_, k) => { const inp = document.getElementById("ans-" + k); if (inp) r.draft[k] = inp.value; });
+    const text = (r.draft[0] || "").trim();
+    const pending = r.draft.findIndex((_, k) => pendingSugg(k));
+    if (!text) r.entryErr = "Write an answer before you lock in.";
+    else if (pending >= 0) r.entryErr = "Check the spelling suggestion first: use it, or keep your own spelling.";
+    else if (isTaken(text)) r.entryErr = "Another player already picked that answer. Choose a different one.";
+    else r.entryErr = "";
+    if (r.entryErr) {
+      render();
+      document.getElementById("ans-0")?.focus();
+      return;
+    }
+    lockIn(r.draft);
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (e.target.id === "custom-form") {
+    const title = document.getElementById("c-title").value.trim();
+    const by = document.getElementById("c-by").value.trim();
+    const rows = parseLines(document.getElementById("c-list").value);
+    if (!title) S.ui.customErr = "Give the list a title.";
+    else if (rows.length < 10) S.ui.customErr = `The ranking needs at least 10 lines. It has ${rows.length} now.`;
+    else {
+      const id = "c" + Date.now().toString(36);
+      S.custom.push({ id, custom: true, title, by: by || "custom list", prompt: by ? `${title}, ranked ${by}.` : title + ".", source: "",
+        list: rows.map(x => x.entry), tension: rows.map((x, i) => x.tension && i >= 10 ? i + 1 : 0).filter(Boolean) });
+      S.setup.selected.push(id);
+      saveStore({ custom: S.custom });
+      VOCAB = null;
+      S.ui.customOpen = false; S.ui.customErr = "";
+    }
+    render();
+  }
+});
+
+/* ---------- answer timer ---------- */
+setInterval(() => {
+  if (!S || S.phase !== "entry" || !S.round.deadline) return;
+  const exact = secsLeftExact();
+  const secs = document.getElementById("timer-secs"), bar = document.getElementById("timer-bar"), box = document.getElementById("timer");
+  if (secs) secs.textContent = Math.ceil(exact);
+  if (bar) bar.style.width = (100 * exact / S.setup.timer) + "%";
+  if (box) box.classList.toggle("urgent", exact <= 5);
+  if (exact <= 0) {
+    const r = S.round;
+    Array.from({ length: S.setup.guesses }, (_, k) => { const inp = document.getElementById("ans-" + k); if (inp) r.draft[k] = inp.value; });
+    const text = (r.draft[0] || "").trim();
+    lockIn(text && !isTaken(text) ? [text] : []);
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}, 200);
+
+/* true when another player already locked in the same answer this round (same list entry or same text) */
+function isTaken(text) {
+  const r = S.round, cat = catById(r.catId), { rank, member } = findMatch(text, cat), n = norm(text);
+  return r.answers.some(a => (a || []).some(x => x.kind !== "timeout" && ((rank && x.rank === rank && (x.member || "") === member) || norm(x.text) === n)));
+}
+
+/* ---------- boot ---------- */
+function start(data) {
+  S = data && data.phase && data.setup && (!data.round || data.round.order) && (data.phase !== "entry" || data.round.draft) ? data : init();
+  if (S.setup.timer === undefined) S.setup.timer = 0;
+  S.setup.guesses = 1;
+  for (const g of ["conts", "measures", "dirs"]) if (!Array.isArray(S.setup[g])) S.setup[g] = DEFAULT_DECK[g].slice();
+  if (!Array.isArray(S.setup.twists)) S.setup.twists = ["letters", "clubs", "calc"];
+  if (S.setup.hard === undefined) S.setup.hard = false;
+  if (S.setup.twistsOn === undefined) S.setup.twistsOn = true;
+  if (!S.gen) S.gen = {};
+  /* lists added in an update start switched on */
+  if (!Array.isArray(S.setup.known)) S.setup.known = S.setup.selected.slice();
+  for (const c of classicCats()) if (!S.setup.known.includes(c.id)) { S.setup.known.push(c.id); if (!S.setup.selected.includes(c.id)) S.setup.selected.push(c.id); }
+  render();
+}
+window.claude?.hot?.snapshot?.(() => S);
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+</script>
+</body>
+</html>
