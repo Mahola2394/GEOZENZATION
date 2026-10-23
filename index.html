@@ -1775,7 +1775,8 @@ function revealHTML() {
     </div>` : `
     <div class="row end">
       <button class="btn" type="button" data-act="revealall">Reveal all</button>
-      <button class="btn primary big" type="button" data-act="rollpause">${paused ? "Resume" : "Pause"}</button>
+      ${AUTO_ROLL ? `<button class="btn primary big" type="button" data-act="rollpause">${paused ? "Resume" : "Pause"}</button>`
+        : `<button class="btn primary big" type="button" data-act="reveal">${step === 0 ? "Reveal #1" : step < 10 ? `Reveal #${step + 1}` : "Reveal the danger zone"}</button>`}
     </div>`;
 
   const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? (S.players.some(p => p.host) ? "The host starts the next round." : "The next round starts from the big screen.") : `${esc((S.players.find(p => p.host) || {}).name || (S.mp && S.mp.room ? "The big screen" : "The host"))} is revealing the list.`}</p>` : "";
@@ -1789,7 +1790,7 @@ function revealHTML() {
       ${cat.source ? `<p class="source">Source: ${esc(cat.source)}</p>` : ""}
     </section>` : "";
 
-  const status = done ? (isSuddenRound() ? "Sudden death done" : `Round ${S.roundIdx + 1} done`) : step === 0 ? "Everyone has answered · the reveal starts in a moment" : step <= 10 ? `Revealed #1${step > 1 ? ` to #${step}` : ""}${S.ui.rollPaused ? " · paused" : ""}` : "";
+  const status = done ? (isSuddenRound() ? "Sudden death done" : `Round ${S.roundIdx + 1} done`) : step === 0 ? (AUTO_ROLL ? "Everyone has answered · the reveal starts in a moment" : "Everyone has answered") : step <= 10 ? `Revealed #1${step > 1 ? ` to #${step}` : ""}${AUTO_ROLL && S.ui.rollPaused ? " · paused" : ""}` : "";
   return `
   ${scoreStripHTML()}
   ${headHTML(cat)}
@@ -2576,10 +2577,11 @@ document.addEventListener("submit", e => {
   }
 });
 
-/* ---------- rolling reveal: one place every second, a 2-second pause before #10 ---------- */
+/* ---------- rolling reveal (switched off for now: the host clicks to reveal each place) ---------- */
+const AUTO_ROLL = false;
 const rollDelay = nextStep => nextStep === 10 ? 2000 : 1000;
 function rollTick() {
-  if (!S || S.phase !== "reveal") return;
+  if (!AUTO_ROLL || !S || S.phase !== "reveal") return;
   if (S.mp && !S.mp.isHost) return;
   const key = S.mp ? "mp" + ((S.mp.room && S.mp.room.state && S.mp.room.state.abs) ?? "") : "l" + S.roundIdx;
   if (S.ui.rollKey !== key) { S.ui.rollKey = key; S.ui.rollPaused = false; S.ui.rollBusy = false; S.ui.rollAt = Date.now() + 1000; }
