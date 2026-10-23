@@ -369,10 +369,33 @@ ol.rest li.t span { color: var(--tension); }
 .levelbox.level-hard { border-color: var(--tension); }
 .levelbox.level-extreme { border-color: var(--tension); box-shadow: inset 4px 0 0 var(--tension); }
 
+/* big screen */
+.hostopt { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 8px; background: var(--surface-2); }
+.hostopt > b { font-family: var(--display); font-weight: 800; font-size: 19px; text-transform: uppercase; }
+.hostopt .hint { margin: 0; }
+.screen-join { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; }
+@media (max-width: 620px) { .screen-join { grid-template-columns: minmax(0, 1fr); } }
+.screen-join .join-steps { font-size: 17px; margin: 0; max-width: 46ch; }
+.qr { background: #fff; padding: 12px; border-radius: 12px; width: min(260px, 70vw); line-height: 0; }
+.qr svg, .qr img { width: 100%; height: auto; display: block; }
+.mp-players.big li { font-size: 18px; padding: 10px 16px; }
+.answered-list li b { font-family: var(--mono); margin-left: 4px; color: var(--muted); }
+.answered-list li.done { background: color-mix(in srgb, var(--pc) 16%, var(--surface-2)); }
+.answered-list li.done b { color: var(--hit); }
+.answered-count { font-size: 16px; color: var(--muted); }
+.answered-count b { font-family: var(--display); font-size: 34px; color: var(--ink); }
+body.bigscreen { font-size: 17px; }
+body.bigscreen .wrap { max-width: 1400px; }
+body.bigscreen .round-head h2 { font-size: clamp(36px, 5vw, 64px); }
+body.bigscreen .specs dd { font-size: 17px; }
+body.bigscreen .slot .ans b { font-size: 20px; }
+body.bigscreen .timer .secs { font-size: 56px; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
-<!-- phone mode: Supabase library + this site's project details -->
+<!-- phone mode: Supabase library, QR codes for the big screen, and this site's project details -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js"></script>
 </head>
 <body>
@@ -1124,7 +1147,10 @@ const pc = i => `--pc: var(--p${S.players[i].color})`;
 const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + Math.abs(n);
 const worth = rank => rank <= 3 ? "−" + (4 - rank) : "+" + rank;
 
-function render() { renderMain(); renderSide(); }
+function render() {
+  if (document.body && document.body.classList) document.body.classList.toggle("bigscreen", !!(S.mp && S.mp.isScreen));
+  renderMain(); renderSide();
+}
 function renderMain() {
   const el = document.getElementById("main");
   const ph = S.phase;
@@ -1227,9 +1253,17 @@ function setupHTML(ctx) {
     <div class="mp-split">
       <div class="stack">
         <h3 class="deck-h">Host a game</h3>
-        <p class="hint">Create a room, then share the code. You play too, and your phone runs the reveal.</p>
-        <label class="field"><span class="label">Your name</span><input type="text" id="mp-host-name" data-mpfield="hostName" value="${esc(f.hostName || "")}" maxlength="18" placeholder="Your name"></label>
-        <div><button class="btn primary big" type="button" data-act="mpcreate" ${S.ui.mpBusy ? "disabled" : ""}>Create room</button></div>
+        <div class="hostopt">
+          <b>On a big screen</b>
+          <p class="hint">This laptop or TV shows the room code, the question and the reveal. Everyone, you included, plays on their phone.</p>
+          <div><button class="btn primary big" type="button" data-act="mpscreen" ${S.ui.mpBusy ? "disabled" : ""}>Start big screen</button></div>
+        </div>
+        <div class="hostopt">
+          <b>Or play on this device</b>
+          <p class="hint">You play here too, and this device runs the reveal.</p>
+          <label class="field"><span class="label">Your name</span><input type="text" id="mp-host-name" data-mpfield="hostName" value="${esc(f.hostName || "")}" maxlength="18" placeholder="Your name"></label>
+          <div><button class="btn big" type="button" data-act="mpcreate" ${S.ui.mpBusy ? "disabled" : ""}>Create room</button></div>
+        </div>
       </div>
       <div class="stack">
         <h3 class="deck-h">Join a game</h3>
@@ -1418,7 +1452,7 @@ function revealHTML() {
       <button class="btn primary big" type="button" data-act="reveal">${nextLabel}</button>
     </div>`;
 
-  const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? "The host starts the next round." : `${esc((S.players.find(p => p.host) || {}).name || "The host")} is revealing the list.`}</p>` : "";
+  const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? (S.players.some(p => p.host) ? "The host starts the next round." : "The next round starts from the big screen.") : `${esc((S.players.find(p => p.host) || {}).name || (S.mp && S.mp.room ? "The big screen" : "The host"))} is revealing the list.`}</p>` : "";
   const more = done ? `
     <section class="panel stack" id="tension-panel">
       <div class="tension-list"><span class="label">Tension answers</span>${cat.tension.map(rk => `<span class="chip t">#${rk} ${esc(cat.list[rk - 1][0])}</span>`).join("")}</div>
@@ -1584,26 +1618,29 @@ async function mpClient() {
   return SB;
 }
 
-async function mpCreate(name) {
+async function mpCreate(name, asScreen) {
   const sb = await mpClient();
   for (let tries = 0; tries < 8; tries++) {
     const code = Array.from({ length: 4 }, () => MP_LETTERS[Math.floor(Math.random() * MP_LETTERS.length)]).join("");
     const { error } = await sb.from("rooms").insert({ code, state: { phase: "lobby", base: 0, round: 0, rounds: 0, abs: -1 } });
-    if (!error) return mpJoinRoom(code, name);
+    if (!error) return mpJoinRoom(code, name, asScreen);
     if (error.code !== "23505") throw new Error("Couldn't create the room: " + error.message);
   }
   throw new Error("Couldn't find a free room code. Try again.");
 }
 
-async function mpJoinRoom(code, name) {
+/* asScreen: this device runs the game for a big screen but isn't a player itself */
+async function mpJoinRoom(code, name, asScreen) {
   const sb = await mpClient();
   code = (code || "").toUpperCase().replace(/[^A-Z]/g, "");
   if (code.length !== 4) throw new Error("Room codes have four letters.");
   const { data: room, error } = await sb.from("rooms").select("*").eq("code", code).maybeSingle();
   if (error) throw new Error(error.message);
   if (!room) throw new Error(`There's no game with the code ${code}. Check the code with the host.`);
+  if (asScreen && room.host !== M.me) throw new Error("Only the device that created the room can be its big screen.");
   const { data: mine } = await sb.from("players").select("*").eq("room_code", code).eq("uid", M.me).maybeSingle();
-  if (!mine) {
+  if (asScreen) {}
+  else if (!mine) {
     const { error: e2 } = await sb.from("players").insert({ room_code: code, name: name || "Player" });
     if (e2 && e2.code !== "23505") throw new Error("Couldn't join: " + e2.message);
     const { data: all } = await sb.from("players").select("uid, joined_at").eq("room_code", code).order("joined_at");
@@ -1614,15 +1651,20 @@ async function mpJoinRoom(code, name) {
   } else if (name && mine.name !== name) {
     await sb.from("players").update({ name }).eq("room_code", code).eq("uid", M.me);
   }
-  S.mp = { code, isHost: room.host === M.me, room: null, players: [], answers: {}, done: {}, progress: [],
+  S.mp = { code, isHost: room.host === M.me, isScreen: !!asScreen, room: null, players: [], answers: {}, done: {}, progress: [],
     draft: [""], kept: [""], entryErr: "", submitted: "", timedOut: false, sending: false, lastAbs: null, focus: false };
-  saveStore({ mp: { code }, mpName: name || (mine && mine.name) || "" });
+  saveStore(asScreen ? { mp: { code, screen: true } } : { mp: { code }, mpName: name || (mine && mine.name) || "" });
   await mpRefreshNow();
   mpSubscribe();
 }
 
-async function mpResume(code) {
+async function mpResume(code, asScreen) {
   const sb = await mpClient();
+  if (asScreen) {
+    const { data: room } = await sb.from("rooms").select("host").eq("code", code).maybeSingle();
+    if (!room || room.host !== M.me) { saveStore({ mp: null }); return; }
+    return mpJoinRoom(code, "", true);
+  }
   const { data: me } = await sb.from("players").select("*").eq("room_code", code).eq("uid", M.me).maybeSingle();
   if (!me) { saveStore({ mp: null }); return; }
   await mpJoinRoom(code, me.name);
@@ -1651,7 +1693,7 @@ async function mpRefreshNow() {
   ]);
   if (!r1.error && !r1.data) return mpGone("The host closed the room.");
   if (r1.error) throw new Error(r1.error.message);
-  if (r2.data && !r2.data.some(p => p.uid === M.me)) return mpGone("You're no longer in that room.");
+  if (r2.data && !S.mp.isScreen && !r2.data.some(p => p.uid === M.me)) return mpGone("You're no longer in that room.");
   await mpApplyRoom(r1.data, r2.data);
 }
 
@@ -1744,6 +1786,7 @@ async function mpWrite(state, extra) {
   if (data) await mpApplyRoom(data, null);
 }
 async function mpStartGame() {
+  if (S.mp.isScreen && !S.mp.players.length) throw new Error("Nobody has joined yet. Scan the QR code or enter the room code on a phone to join.");
   const q = buildQueue();
   if (!q.queue.length) throw new Error("There are no lists to play. Turn on random twists or pick lists in Advanced settings.");
   const items = q.queue.map((id, i) => Object.assign(q.gen[id] ? { spec: q.gen[id].spec, title: q.gen[id].title } : { id }, { hard: !!q.hard[i] }));
@@ -1851,8 +1894,66 @@ function mpTimerTick() {
 
 /* ---- screens ---- */
 function mpShareLink() { return location.origin + location.pathname + "?room=" + S.mp.code; }
+/* QR code for the join link (needs the qrcode-generator library; shows nothing without it) */
+function mpQR(text) {
+  try {
+    if (typeof window.qrcode !== "function") return "";
+    const q = window.qrcode(0, "M"); q.addData(text); q.make();
+    try { return q.createSvgTag(6, 2); } catch (e) { return q.createImgTag(6, 2); }
+  } catch (e) { return ""; }
+}
+function mpScreenLobbyHTML() {
+  const mp = S.mp, link = mpShareLink(), qr = mpQR(link);
+  const list = S.players.map((p, i) => `<li style="${pc(i)}"><span class="dot"></span><span>${esc(p.name)}</span></li>`).join("");
+  return `
+  <section class="panel screen-join">
+    <div class="stack" style="gap: 10px; min-width: 0">
+      <p class="eyebrow">Join on your phone</p>
+      <div class="roomcode" aria-label="Room code ${mp.code.split("").join(" ")}">${mp.code}</div>
+      <p class="join-steps">Scan the code, or go to <b>${esc(location.host + location.pathname.replace(/\/$/, ""))}</b>, choose <b>Everyone on their phone</b> and enter <b>${mp.code}</b>.</p>
+      <div class="row"><input type="text" id="mp-link" readonly value="${esc(link)}" style="flex: 1 1 220px"><button type="button" class="btn" data-act="mpcopy">Copy link</button></div>
+    </div>
+    ${qr ? `<div class="qr" aria-label="QR code for the join link">${qr}</div>` : ""}
+  </section>
+  <section class="panel stack">
+    <div class="row" style="justify-content: space-between"><h2 class="label">Players</h2><span class="hint">${S.players.length} of ${MP_MAX}</span></div>
+    ${S.players.length ? `<ol class="mp-players big">${list}</ol>` : `<p class="hint">Nobody has joined yet. Players appear here as they join.</p>`}
+  </section>
+  ${setupHTML("lobby")}
+  ${S.ui.mpErr ? `<p class="err">${esc(S.ui.mpErr)}</p>` : ""}
+  <div><button type="button" class="linkbtn" data-act="mpleave">Close the room</button></div>`;
+}
+function mpScreenQuestionHTML() {
+  const mp = S.mp, st = mp.room.state, cat = catById(S.round.catId);
+  if (!cat || !cat.list) return `<section class="panel"><p class="hint">Loading the next list…</p></section>`;
+  const roster = (st.rosters || [])[st.round] || [];
+  const answered = roster.filter(u => mp.progress.includes(u)).length;
+  const left = st.deadline ? Math.max(0, (st.deadline - Date.now()) / 1000) : 0;
+  const chips = S.players.filter(p => roster.includes(p.uid)).map(p => {
+    const i = S.players.indexOf(p), done = mp.progress.includes(p.uid);
+    return `<li class="${done ? "done" : ""}" style="${pc(i)}"><span class="dot"></span><span>${esc(p.name)}</span><b>${done ? "✓" : "…"}</b></li>`;
+  }).join("");
+  return `
+  ${headHTML(cat)}
+  <section class="panel stack screen-wait">
+    ${st.deadline ? `<div class="timer" id="timer" style="--pc: var(--accent)"><span class="secs" id="timer-secs">${Math.ceil(left)}</span><span class="bar"><span id="timer-bar" style="width: ${100 * left / ((st.settings && st.settings.timer) || 1)}%"></span></span></div>` : ""}
+    <div class="row" style="justify-content: space-between; align-items: baseline">
+      <h3 class="deck-h">Answer on your phone</h3>
+      <span class="answered-count"><b>${answered}</b> of ${roster.length} answered</span>
+    </div>
+    <ol class="mp-players big answered-list">${chips}</ol>
+    <p class="hint">First come, first served: once an answer is taken, nobody else can use it. The reveal starts when everyone has answered${st.deadline ? " or the time runs out" : ""}.</p>
+    <div><button type="button" class="linkbtn" data-act="mpclose">End the round now</button></div>
+  </section>
+  <section class="panel stack">
+    <span class="label">What each place is worth</span>
+    <div class="ladder big">${Array.from({ length: 10 }, (_, i) => `<span style="--h: var(--h${i + 1})"><b>#${i + 1}</b><em>${worth(i + 1)}${i === 9 ? "★" : ""}</em></span>`).join("")}</div>
+    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2. Tension answers just outside the top 10 cost −5. Anything else costs −3.</p>
+  </section>`;
+}
 function mpLobbyHTML() {
   const mp = S.mp;
+  if (mp.isScreen) return mpScreenLobbyHTML();
   const hostName = (S.players.find(p => p.host) || {}).name || "the host";
   const list = S.players.map((p, i) => `<li style="${pc(i)}"><span class="dot"></span><span>${esc(p.name)}</span>${p.host ? '<span class="tag">host</span>' : ""}${p.me ? '<span class="tag">you</span>' : ""}</li>`).join("");
   return `
@@ -1865,13 +1966,14 @@ function mpLobbyHTML() {
   <section class="panel stack">
     <div class="row" style="justify-content: space-between"><h2 class="label">Players</h2><span class="hint">${S.players.length} of ${MP_MAX}</span></div>
     <ol class="mp-players">${list}</ol>
-    ${mp.isHost ? "" : `<p class="hint">Waiting for ${esc(hostName)} to start the game.</p>`}
+    ${mp.isHost ? "" : `<p class="hint">${S.players.some(p => p.host) ? `Waiting for ${esc(hostName)} to start the game.` : "Waiting for the game to start on the big screen."}</p>`}
   </section>
   ${mp.isHost ? setupHTML("lobby") : ""}
   ${S.ui.mpErr ? `<p class="err">${esc(S.ui.mpErr)}</p>` : ""}
   <div><button type="button" class="linkbtn" data-act="mpleave">${mp.isHost ? "Close the room" : "Leave the room"}</button></div>`;
 }
 function mpQuestionHTML() {
+  if (S.mp.isScreen) return mpScreenQuestionHTML();
   const mp = S.mp, st = mp.room.state, cat = catById(S.round.catId);
   if (!cat || !cat.list) return `<section class="panel"><p class="hint">Loading the next list…</p></section>`;
   const me = S.players.findIndex(p => p.me);
@@ -1945,6 +2047,7 @@ document.addEventListener("click", e => {
     mpAction(() => act === "mpcreate" ? mpCreate(name) : mpJoinRoom(f.code || "", name));
     return;
   }
+  if (act === "mpscreen") { mpAction(() => mpCreate("", true)); return; }
   if (act === "mpstart") { if (S.mp && S.mp.isHost) mpAction(mpStartGame); return; }
   if (act === "mpclose") { if (S.mp && S.mp.isHost) mpAction(mpCloseRound); return; }
   if (act === "mpleave") { mpAction(mpLeave); return; }
@@ -2103,7 +2206,7 @@ function start(data) {
   if (mpAvailable()) {
     const room = new URLSearchParams(location.search).get("room");
     if (room) { S.ui.mode = "phones"; S.ui.mpForm.code = room.toUpperCase().slice(0, 4); }
-    if (st.mp && st.mp.code) mpAction(() => mpResume(st.mp.code));
+    if (st.mp && st.mp.code) mpAction(() => mpResume(st.mp.code, !!st.mp.screen));
   }
   render();
 }
