@@ -2576,13 +2576,13 @@ document.addEventListener("submit", e => {
   }
 });
 
-/* ---------- rolling reveal: one place every 3 seconds, a longer pause before #10 and the danger zone ---------- */
-const rollDelay = nextStep => nextStep === 10 || nextStep === 11 ? 5000 : 3000;
+/* ---------- rolling reveal: one place every second, a 2-second pause before #10 ---------- */
+const rollDelay = nextStep => nextStep === 10 ? 2000 : 1000;
 function rollTick() {
   if (!S || S.phase !== "reveal") return;
   if (S.mp && !S.mp.isHost) return;
   const key = S.mp ? "mp" + ((S.mp.room && S.mp.room.state && S.mp.room.state.abs) ?? "") : "l" + S.roundIdx;
-  if (S.ui.rollKey !== key) { S.ui.rollKey = key; S.ui.rollPaused = false; S.ui.rollBusy = false; S.ui.rollAt = Date.now() + 2500; }
+  if (S.ui.rollKey !== key) { S.ui.rollKey = key; S.ui.rollPaused = false; S.ui.rollBusy = false; S.ui.rollAt = Date.now() + 1000; }
   if (S.ui.rollPaused || S.ui.rollBusy || Date.now() < S.ui.rollAt) return;
   const next = (S.round.step || 0) + 1;
   if (S.mp) {
