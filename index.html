@@ -355,6 +355,9 @@ ol.rest li.t span { color: var(--tension); }
 .specs > div { display: flex; flex-direction: column; gap: 1px; padding: 6px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); min-width: 0; }
 .specs dt { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .specs dd { margin: 0; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+.specs .ans { background: var(--ink); border-color: var(--ink); }
+.specs .ans dt { color: color-mix(in srgb, var(--bg) 72%, var(--ink)); }
+.specs .ans dd { color: var(--bg); }
 .specs .flip { border-color: var(--accent); }
 .specs .flip dd { color: var(--accent); }
 .specs .filt { border-style: dashed; border-color: var(--accent); }
@@ -426,6 +429,54 @@ body.bigscreen .timer .secs { font-size: 56px; }
 .howto { margin: 0; padding-left: 1.3em; display: flex; flex-direction: column; gap: 12px; }
 .howto > li::marker { font-family: var(--display); font-weight: 800; color: var(--accent); }
 .howto .rules { margin: 10px 0; }
+
+/* revealing the top 10: only the question, the answers and the board, sized to fit one screen.
+   The scoreboard, facts and the rest come back once the round's points are settled. */
+body.revealing header.top, body.revealing #side, body.revealing .scorestrip,
+body.revealing .round-head .eyebrow, body.revealing .round-head .specs, body.revealing .round-head .specnote, body.revealing .round-head .fulltext,
+body.revealing #answers-panel > .label { display: none !important; }
+body.revealing .wrap { padding-block: 12px 12px; max-width: 1400px; }
+body.revealing .layout { grid-template-columns: minmax(0, 1fr); }
+body.revealing #main { gap: clamp(6px, 1.2vh, 12px); }
+body.revealing .round-head h2 { font-size: clamp(20px, 3.6vh, 44px); margin: 0; }
+body.revealing .answers { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px; }
+body.revealing #answers-panel { padding: 8px 10px; }
+body.revealing .acard { padding: 6px 10px; }
+body.revealing .acard-h { margin-bottom: 2px; }
+body.revealing .board { gap: clamp(3px, 0.6vh, 6px); }
+body.revealing .slot { min-height: clamp(32px, 5.6vh, 64px); }
+body.revealing .slot .ans { padding-block: 2px; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
+body.revealing .slot .ans b { display: inline; }
+body.revealing .slot .ans b { font-size: clamp(15px, 2.3vh, 24px); }
+body.revealing .slot .rk { font-size: clamp(18px, 3vh, 32px); }
+body.revealing .slot .end { padding-block: 2px; }
+body.revealing .revealbar { padding: 6px 10px; }
+@media (max-width: 880px) {
+  body.revealing .revealbar > .label { display: none; }
+  body.revealing .slot .ans small { font-size: 11px; }
+  body.revealing .acard { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 4px 8px; }
+  body.revealing .acard-h { display: contents; }
+  body.revealing .acard-h > span:first-child { grid-column: 1; grid-row: 1; font-size: 13px; }
+  body.revealing .acard-h .v { grid-column: 2; grid-row: 1 / span 2; font-size: 15px; }
+  body.revealing .acard ol { grid-column: 1; grid-row: 2; }
+  body.revealing .acard li { font-size: 13px; display: block; }
+  body.revealing .acard .res, body.revealing .acard li.perfect { display: none; }
+  body.revealing .slot { min-height: 38px; }
+  body.revealing .round-head h2 { font-size: 21px; line-height: 1.05; }
+}
+
+/* typing on a phone: while the keyboard is up, show only the question, the timer and the answer box */
+@media (max-width: 880px) {
+  body.typing header.top, body.typing #side, body.typing .scorestrip,
+  body.typing .round-head .eyebrow, body.typing .round-head .specs > div:not(.ans), body.typing .round-head .specnote, body.typing .round-head .fulltext,
+  body.typing .turn .who-now, body.typing .turn .hint, body.typing .typing-hide, body.typing #main > .panel:not(.turn) { display: none !important; }
+  body.typing .wrap { padding-top: 10px; }
+  body.typing .round-head h2 { font-size: 24px; line-height: 1.1; margin: 0; }
+  body.typing .round-head .specs { margin-top: 8px; }
+  body.typing .turn { gap: 10px; padding-top: 12px; padding-bottom: 12px; }
+  body.typing .layout { gap: 10px; }
+  body.typing #main { gap: 10px; }
+}
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
@@ -1066,6 +1117,24 @@ const FIXED_FACTS = {
 const CITY_NOTES = { "citiesof-united-kingdom": "Whole urban areas, so Leeds and Bradford share a place", "citiesof-japan": "Tokyo counts its 23 central wards",
   "citiesof-norway": "Suburban municipalities like Bærum are left out", "citiesof-sweden": "Whole urban areas" , "citiesof-denmark": "Whole urban areas",
   "citiesof-australia": "Whole urban areas", "city-eu": "Capitals don't count. Istanbul counts as Europe" };
+/* what a player should type for a list: shown as the "Answer with" box on every question */
+const CAP_ANSWER = "Capital or its country";
+function answerType(cat) {
+  if (!cat || cat.custom) return "";
+  if (cat.spec && cat.spec.near) return CAP_ANSWER;
+  const metric = cat.metric || (cat.spec && cat.spec.metric);
+  if (metric && MET[metric]) { const M = MET[metric]; return metric === "cap" || M.capItem || M.alpha === "capital" ? (M.alpha === "capital" ? "Capital" : CAP_ANSWER) : "Country"; }
+  const id = String(cat.baseId || cat.id).replace(/\|hard$/, "");
+  if (id === "nacap") return CAP_ANSWER;
+  if (/^rivers/.test(id)) return "River";
+  if (/^peaks/.test(id)) return "Mountain";
+  if (/^lakes/.test(id)) return "Lake";
+  if (id === "islands") return "Island";
+  if (id === "states") return "US state";
+  if (/^lang-/.test(id)) return "Language";
+  if (/^(city-|citiesof-)/.test(id)) return "City";
+  return "Country";
+}
 function factsFor(cat) {
   let f;
   if (cat.facts) f = Object.assign({}, cat.facts);
@@ -1074,6 +1143,7 @@ function factsFor(cat) {
   else if (/^city-/.test(cat.id)) f = { region: cat.title.replace(/^.* in /, ""), ranked: "Population", order: ORDER_BIG, note: CITY_NOTES[cat.id] || "Capitals don't count" };
   else f = { ranked: (cat.by || "").replace(/^by /, "").replace(/^./, c => c.toUpperCase()) };
   if (cat.hardFact) f.hard = cat.hardFact;
+  if (!f.answer) { const a = answerType(cat); if (a) f.answer = a; }
   return f;
 }
 
@@ -1473,7 +1543,13 @@ document.addEventListener("visibilitychange", () => { if (S) wakeSync(); });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && S && S.ui && S.ui.help) { S.ui.help = false; saveStore({ seenHelp: true }); renderHelp(); } });
 function render() {
   wakeSync();
-  if (document.body && document.body.classList) document.body.classList.toggle("bigscreen", !!(S.mp && S.mp.isScreen));
+  if (document.body && document.body.classList) {
+    document.body.classList.toggle("bigscreen", !!(S.mp && S.mp.isScreen));
+    if (S.phase !== "entry" && S.phase !== "mp-question") document.body.classList.remove("typing");
+    const wasRevealing = document.body.classList.contains("revealing");
+    document.body.classList.toggle("revealing", S.phase === "reveal");
+    if (!wasRevealing && S.phase === "reveal" && window.scrollTo) window.scrollTo(0, 0);
+  }
   renderMain(); renderSide();
 }
 function renderMain() {
@@ -1485,6 +1561,8 @@ function renderMain() {
   if (S.ui && S.ui.scrollTo) {
     const target = document.getElementById(S.ui.scrollTo);
     S.ui.scrollTo = null;
+    /* during the reveal everything fits on one screen, so just keep it at the top */
+    if (S.phase === "reveal") { if (window.scrollTo) window.scrollTo(0, 0); return; }
     const smooth = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     if (target && target.scrollIntoView) requestAnimationFrame(() => target.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "center" }));
   }
@@ -1677,7 +1755,7 @@ function headHTML(cat) {
     <p class="eyebrow">Round ${S.roundIdx + 1} of ${S.queue.length}${cat.twist ? ' <span class="badge">Twist</span>' : ""}${cat.hard ? ' <span class="badge hard">Hard</span>' : ""}</p>
     <h2>${esc(cat.title)}</h2>
     <dl class="specs">
-      ${item("region", "Region")}${item("ranked", "Ranked by")}${item("order", "Order", f.small ? "flip" : "")}${item("filter", "Filter", "filt")}${item("hard", "Hard mode", "hardf")}
+      ${item("answer", "Answer with", "ans")}${item("region", "Region")}${item("ranked", "Ranked by")}${item("order", "Order", f.small ? "flip" : "")}${item("filter", "Filter", "filt")}${item("hard", "Hard mode", "hardf")}
     </dl>
     ${f.note ? `<p class="specnote"><b>Note</b> ${esc(f.note)}</p>` : ""}
     ${cat.prompt ? `<details class="fulltext"><summary>Full description</summary><p class="prompt">${esc(cat.prompt)}</p></details>` : ""}
@@ -1970,6 +2048,23 @@ function mpAction(fn) {
   S.ui.mpBusy = true; S.ui.mpErr = ""; render();
   return mpQueue(async () => { try { await fn(); } finally { S.ui.mpBusy = false; mpRender(); } });
 }
+/* phones: while an answer box has focus (keyboard up), body.typing hides everything but the question and the box.
+   Leaving is delayed a moment, so tapping "Lock in" doesn't move the button away mid-tap, and a re-render that
+   puts the focus straight back doesn't flicker. */
+const isAnswerBox = el => !!(el && el.dataset && el.dataset.ans !== undefined);
+let typingOffTimer = null;
+document.addEventListener("focusin", e => {
+  if (!isAnswerBox(e.target) || !document.body) return;
+  clearTimeout(typingOffTimer);
+  const was = document.body.classList.contains("typing");
+  document.body.classList.add("typing");
+  if (!was && window.innerWidth <= 880 && window.scrollTo) window.scrollTo(0, 0);
+});
+document.addEventListener("focusout", e => {
+  if (!isAnswerBox(e.target) || !document.body) return;
+  clearTimeout(typingOffTimer);
+  typingOffTimer = setTimeout(() => { if (!isAnswerBox(document.activeElement)) document.body.classList.remove("typing"); }, 300);
+});
 /* re-render without losing the text box focus or cursor */
 function mpRender() {
   const a = document.activeElement, id = a && a.id, pos = a && a.selectionStart;
@@ -2414,7 +2509,7 @@ function mpQuestionHTML() {
   <section class="panel turn stack" style="${me >= 0 ? pc(me) : ""}">
     <div class="who-now"><span class="name">${me >= 0 ? esc(S.players[me].name) : "You"}</span><span class="hint">your answer</span></div>
     ${body}
-    ${mp.isHost ? `<div><button type="button" class="linkbtn" data-act="mpclose">Everyone's done? End the round now</button></div>` : ""}
+    ${mp.isHost ? `<div class="typing-hide"><button type="button" class="linkbtn" data-act="mpclose">Everyone's done? End the round now</button></div>` : ""}
   </section>
   <section class="panel stack">
     <span class="label">What each place is worth</span>
