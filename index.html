@@ -468,11 +468,18 @@ body.revealing .revealbar { padding: 6px 10px; }
 /* typing on a phone: while the keyboard is up, show only the question, the timer and the answer box */
 @media (max-width: 880px) {
   body.typing header.top, body.typing #side, body.typing .scorestrip,
-  body.typing .round-head .eyebrow, body.typing .round-head .specs > div:not(.ans), body.typing .round-head .specnote, body.typing .round-head .fulltext,
+  body.typing .round-head .eyebrow,
   body.typing .turn .who-now, body.typing .turn .hint, body.typing .typing-hide, body.typing #main > .panel:not(.turn) { display: none !important; }
   body.typing .wrap { padding-top: 10px; }
   body.typing .round-head h2 { font-size: 24px; line-height: 1.1; margin: 0; }
-  body.typing .round-head .specs { margin-top: 8px; }
+  body.typing .round-head .specs { margin-top: 8px; gap: 4px; }
+  body.typing .round-head .specs > div { padding: 3px 8px; flex-direction: row; align-items: baseline; gap: 5px; }
+  body.typing .round-head .specs dt { font-size: 9.5px; }
+  body.typing .round-head .specs dd { font-size: 13px; }
+  body.typing .round-head .specnote { margin: 6px 0 0; font-size: 13px; }
+  body.typing .round-head .fulltext { margin-top: 4px; font-size: 13px; }
+  body.typing .turn .timer .secs { font-size: 26px; }
+  body.typing .turn { padding-top: 8px; }
   body.typing .turn { gap: 10px; padding-top: 12px; padding-bottom: 12px; }
   body.typing .layout { gap: 10px; }
   body.typing #main { gap: 10px; }
