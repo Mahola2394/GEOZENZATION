@@ -444,7 +444,7 @@ body.revealing #answers-panel { padding: 8px 10px; }
 body.revealing .acard { padding: 6px 10px; }
 body.revealing .acard-h { margin-bottom: 2px; }
 body.revealing .board { gap: clamp(3px, 0.6vh, 6px); }
-body.revealing .slot { min-height: clamp(32px, 5.6vh, 64px); }
+body.revealing .slot { min-height: clamp(30px, 5vh, 60px); }
 body.revealing .slot .ans { padding-block: 2px; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
 body.revealing .slot .ans b { display: inline; }
 body.revealing .slot .ans b { font-size: clamp(15px, 2.3vh, 24px); }
@@ -463,6 +463,60 @@ body.revealing .revealbar { padding: 6px 10px; }
   body.revealing .acard .res, body.revealing .acard li.perfect { display: none; }
   body.revealing .slot { min-height: 38px; }
   body.revealing .round-head h2 { font-size: 21px; line-height: 1.05; }
+}
+
+/* danger zone under the board */
+.dangerbar { display: flex; flex-direction: column; gap: 4px; }
+.dangerbar > .label { color: var(--tension); }
+.dz-cells { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.dz { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 10px; border-radius: 8px; min-width: 0;
+  background: color-mix(in srgb, var(--tension) 8%, var(--surface)); border: 1px solid color-mix(in srgb, var(--tension) 40%, var(--line)); }
+.dz.hit { background: color-mix(in srgb, var(--tension) 18%, var(--surface)); border-color: var(--tension); }
+.dz .rk { font-family: var(--display); font-weight: 900; font-size: 20px; color: var(--tension); }
+.dz .nm { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.dz .nm b { overflow-wrap: anywhere; }
+.dz .nm small { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+.dz .minus { color: var(--tension); font-weight: 700; }
+.dz .nobody { font-style: italic; font-size: 13px; color: var(--muted); }
+body.revealing .dz { padding: 3px 8px; }
+@media (max-width: 880px) {
+  .dz-cells { gap: 4px; }
+  .dz { padding: 3px 6px; gap: 4px; }
+  .dz .rk { font-size: 16px; }
+  .dz .nm b { font-size: 13px; }
+  .dz .nm small, .dz .nobody { display: none; }
+  .dz .pchip { font-size: 11px; }
+  /* phones: once the danger zone is out the board shows who scored, so the answer cards step aside to make room */
+  body.dzview #answers-panel { display: none; }
+}
+
+/* the round's score view */
+body.scoresview #side { display: none; }
+body.scoresview .layout { grid-template-columns: minmax(0, 1fr); }
+body.scoresview .wrap { max-width: 1300px; padding-top: 14px; }
+body.scoresview header.top { display: none; }
+.scoregrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .scoregrid { grid-template-columns: minmax(0, 1fr); } }
+.roundres { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rs { display: grid; grid-template-columns: minmax(70px, auto) minmax(0, 1fr) auto 56px; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border-left: 5px solid var(--pc); }
+.rs .nm { display: flex; align-items: center; gap: 8px; font-weight: 800; color: var(--pc); }
+.rs .nm .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--pc); flex: none; }
+.rs .ga { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+.rs .ga b { font-size: 17px; overflow-wrap: anywhere; }
+.rs .ga small { color: var(--muted); font-size: 12.5px; }
+.rs .ga .pen { color: var(--tension); }
+.rs .pts { font-family: var(--display); font-weight: 900; font-size: 26px; text-align: right; font-variant-numeric: tabular-nums; }
+.rs .pts.pos { color: var(--hit); }
+.rs .pts.neg { color: var(--tension); }
+body.bigscreen .rs .ga b { font-size: 21px; }
+body.bigscreen .rs .pts { font-size: 34px; }
+@media (max-width: 600px) {
+  .rs { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "nm ga pts" "res res pts"; gap: 4px 10px; padding: 8px 10px; }
+  .rs .nm { grid-area: nm; }
+  .rs .ga { grid-area: ga; }
+  .rs .res { grid-area: res; justify-self: start; }
+  .rs .pts { grid-area: pts; font-size: 24px; }
 }
 
 /* typing on a phone: while the keyboard is up, show only the question, the timer and the answer box */
@@ -1553,9 +1607,13 @@ function render() {
   if (document.body && document.body.classList) {
     document.body.classList.toggle("bigscreen", !!(S.mp && S.mp.isScreen));
     if (S.phase !== "entry" && S.phase !== "mp-question") document.body.classList.remove("typing");
-    const wasRevealing = document.body.classList.contains("revealing");
-    document.body.classList.toggle("revealing", S.phase === "reveal");
-    if (!wasRevealing && S.phase === "reveal" && window.scrollTo) window.scrollTo(0, 0);
+    const wasRevealing = document.body.classList.contains("revealing"), wasScores = document.body.classList.contains("scoresview");
+    const step = S.round ? S.round.step || 0 : 0;
+    const revealing = S.phase === "reveal" || (S.phase === "roundEnd" && step < 12), scoresView = S.phase === "roundEnd" && step >= 12;
+    document.body.classList.toggle("revealing", revealing);
+    document.body.classList.toggle("scoresview", scoresView);
+    document.body.classList.toggle("dzview", S.phase === "roundEnd" && step < 12);
+    if (((!wasRevealing && revealing) || (!wasScores && scoresView)) && window.scrollTo) window.scrollTo(0, 0);
   }
   renderMain(); renderSide();
 }
@@ -1569,7 +1627,7 @@ function renderMain() {
     const target = document.getElementById(S.ui.scrollTo);
     S.ui.scrollTo = null;
     /* during the reveal everything fits on one screen, so just keep it at the top */
-    if (S.phase === "reveal") { if (window.scrollTo) window.scrollTo(0, 0); return; }
+    if (S.phase === "reveal" || S.phase === "roundEnd") { if (window.scrollTo) window.scrollTo(0, 0); return; }
     const smooth = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     if (target && target.scrollIntoView) requestAnimationFrame(() => target.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "center" }));
   }
@@ -1823,6 +1881,8 @@ const secsLeft = () => Math.ceil(secsLeftExact());
 
 function revealHTML() {
   const r = S.round, cat = catById(r.catId), done = S.phase === "roundEnd", step = r.step;
+  /* after the danger zone: step 12 is the round's score view */
+  if (done && step >= 12) return scoresHTML(cat);
   const slots = cat.list.slice(0, 10).map((a, i) => {
     const rank = i + 1, open = step >= rank;
     const who = S.players.map((_, pi) => pi).filter(pi => (r.answers[pi] || []).some(x => onBoard(x) && x.rank === rank));
@@ -1856,7 +1916,7 @@ function revealHTML() {
   const paused = !!S.ui.rollPaused;
   const controls = done ? `
     <div class="row end">
-      <button class="btn primary big" type="button" data-act="next">${S.roundIdx + 1 >= S.queue.length ? "See final results" : "Next round"}</button>
+      <button class="btn primary big" type="button" data-act="scores">See the scores</button>
     </div>` : `
     <div class="row end">
       <button class="btn" type="button" data-act="revealall">Reveal all</button>
@@ -1864,18 +1924,8 @@ function revealHTML() {
         : `<button class="btn primary big" type="button" data-act="reveal">${step === 0 ? "Reveal #1" : step < 10 ? `Reveal #${step + 1}` : "Reveal the danger zone"}</button>`}
     </div>`;
 
-  const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? (S.players.some(p => p.host) ? "The host starts the next round." : "The next round starts from the big screen.") : `${esc((S.players.find(p => p.host) || {}).name || (S.mp && S.mp.room ? "The big screen" : "The host"))} is revealing the list.`}</p>` : "";
-  const more = done ? `
-    <section class="panel stack" id="tension-panel">
-      <div class="tension-list"><span class="label">Danger zone · −5</span>${dangerRanks(cat).map(rk => `<span class="chip t">#${rk} ${esc(cat.list[rk - 1][0])}</span>`).join("")}</div>
-      ${cat.removed && cat.removed.length ? `<details class="more" open><summary>Cut off above the start: #1 to #${cat.removed.length} overall</summary>
-        <ol class="rest" start="1">${cat.removed.map(a => `<li><span>${esc(a[0])}</span><small>${esc(a[1] || "")}</small></li>`).join("")}</ol></details>` : ""}
-      ${cat.list.length > 10 ? `<details class="more"><summary>The rest of the list, #11 to #${cat.list.length}${cat.offset ? ` (#${11 + cat.offset} to #${cat.list.length + cat.offset} overall)` : ""}</summary>
-        <ol class="rest" start="11">${cat.list.slice(10).map((a, i) => `<li class="${i + 11 <= 13 ? "t" : ""}"><span>${esc(a[0])}</span><small>${esc(a[1] || "")}${cat.offset ? ` · #${i + 11 + cat.offset} overall` : ""}</small></li>`).join("")}</ol></details>` : ""}
-      ${cat.source ? `<p class="source">Source: ${esc(cat.source)}</p>` : ""}
-    </section>` : "";
-
-  const status = done ? (isSuddenRound() ? "Sudden death done" : `Round ${S.roundIdx + 1} done`) : step === 0 ? (AUTO_ROLL ? "Everyone has answered · the reveal starts in a moment" : "Everyone has answered") : step <= 10 ? `Revealed #1${step > 1 ? ` to #${step}` : ""}${AUTO_ROLL && S.ui.rollPaused ? " · paused" : ""}` : "";
+  const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? (S.players.some(p => p.host) ? "The host shows the scores next." : "The scores come up on the big screen next.") : `${esc((S.players.find(p => p.host) || {}).name || (S.mp && S.mp.room ? "The big screen" : "The host"))} is revealing the list.`}</p>` : "";
+  const status = done ? (isSuddenRound() ? "Sudden death · danger zone" : "Danger zone revealed") : step === 0 ? (AUTO_ROLL ? "Everyone has answered · the reveal starts in a moment" : "Everyone has answered") : step <= 10 ? `Revealed #1${step > 1 ? ` to #${step}` : ""}${AUTO_ROLL && S.ui.rollPaused ? " · paused" : ""}` : "";
   return `
   ${scoreStripHTML()}
   ${headHTML(cat)}
@@ -1884,13 +1934,83 @@ function revealHTML() {
     <div class="answers">${cards}</div>
   </section>
   <ol class="board" aria-label="Top 10">${slots}</ol>
+  ${done ? dangerBarHTML(cat) : ""}
   <div class="revealbar" role="region" aria-label="Reveal controls">
     <span class="label">${status}</span>
     ${S.mp && !S.mp.isHost ? waitNote : controls}
-  </div>
-  ${more}`;
+  </div>`;
 }
-
+/* the danger zone, shown right under the board once the top 10 is out */
+function dangerBarHTML(cat) {
+  const r = S.round;
+  const cells = dangerRanks(cat).map(rk => {
+    const a = cat.list[rk - 1];
+    const who = S.players.map((_, pi) => pi).filter(pi => (r.answers[pi] || []).some(x => x.rank === rk && x.kind === "tension"));
+    const chips = who.map(pi => `<span class="pchip" style="${pc(pi)}"><span class="dot"></span>${esc(S.players[pi].name)} <span class="minus">−5</span></span>`).join("");
+    return `<div class="dz ${who.length ? "hit" : ""}"><span class="rk">${rk}</span><span class="nm"><b>${esc(a[0])}</b>${a[1] ? `<small>${esc(a[1])}</small>` : ""}</span>${chips || `<span class="nobody">nobody</span>`}</div>`;
+  }).join("");
+  return `<section class="dangerbar" id="tension-panel" aria-label="Danger zone"><span class="label">Danger zone · −5</span><div class="dz-cells">${cells}</div></section>`;
+}
+/* the round's scores: every answer with its place and points, then the total standings */
+function histTableHTML() {
+  const played = S.players[0].rounds.length;
+  return played ? `
+    <div class="hist-wrap"><table class="hist">
+      <thead><tr><th>Round</th>${S.players.map((p, i) => `<th style="${pc(i)}; color: var(--pc)">${esc(p.name.slice(0, 6))}</th>`).join("")}</tr></thead>
+      <tbody>${Array.from({ length: played }, (_, k) => `<tr><td>${k + 1}. ${esc(catById(S.queue[k])?.title || "")}</td>${S.players.map(p => `<td>${signed(p.rounds[k])}</td>`).join("")}</tr>`).join("")}</tbody>
+      <tfoot><tr><td>Total</td>${S.players.map(p => `<td>${p.total}</td>`).join("")}</tr></tfoot>
+    </table></div>` : `<p class="hint">Round results appear here after each round.</p>`;
+}
+function scoresHTML(cat) {
+  const r = S.round, sd = isSuddenRound(), pBy = perfectBy();
+  const pts = i => roundPoints(i, 11);
+  const inRound = S.players.map((_, i) => i).filter(i => r.order.includes(i)).sort((a, b) => pts(b) - pts(a));
+  const rows = inRound.map(i => {
+    const a = (r.answers[i] || [])[0];
+    const shown = a && (a.member || (a.rank && cat.list[a.rank - 1] ? cat.list[a.rank - 1][0] : a.above && cat.removed ? cat.removed[a.above - 1][0] : ""));
+    const pen = perfectPenalty(i, 11) ? `<small class="pen">−2: ${esc(pBy.map(x => S.players[x].name).join(" and "))} found the perfect answer</small>` : "";
+    return `<li class="rs" style="${pc(i)}">
+      <span class="nm"><span class="dot"></span>${esc(S.players[i].name)}</span>
+      <span class="ga"><b>${a && a.kind !== "timeout" ? esc(a.text) : "No answer"}</b>${shown && norm(shown) !== norm(a.text) ? `<small>= ${esc(shown)}</small>` : ""}${pen}</span>
+      <span class="res ${a ? a.kind : "none"}">${a ? resultLabel(a) : "no answer · −3"}</span>
+      <span class="pts ${pts(i) < 0 ? "neg" : pts(i) > 0 ? "pos" : ""}">${signed(pts(i))}</span></li>`;
+  }).join("");
+  const table = S.players.map((p, i) => ({ p, i })).sort((x, y) => y.p.total - x.p.total);
+  const total = table.map((x, k) => {
+    const last = sd ? (r.order.includes(x.i) ? `sudden death ${signed(pts(x.i))}` : "") : x.p.rounds.length ? `${signed(x.p.rounds[x.p.rounds.length - 1])} this round` : "";
+    return `<li class="score" style="${pc(x.i)}"><span class="pos">${k + 1}</span><span class="dot"></span>
+      <span class="nm">${esc(x.p.name)}${last ? `<small>${last}</small>` : ""}</span><span class="tot">${x.p.total}</span></li>`;
+  }).join("");
+  const last = S.roundIdx + 1 >= S.queue.length;
+  const more = `
+    <details class="more"><summary>The full list${cat.list.length > 10 ? `, #11 to #${cat.list.length}` : ""}${cat.offset ? ` (#${11 + cat.offset} to #${cat.list.length + cat.offset} overall)` : ""}</summary>
+      ${cat.removed && cat.removed.length ? `<p class="label">Cut off above the start: #1 to #${cat.removed.length} overall</p>
+        <ol class="rest" start="1">${cat.removed.map(a => `<li><span>${esc(a[0])}</span><small>${esc(a[1] || "")}</small></li>`).join("")}</ol>` : ""}
+      <ol class="rest" start="11">${cat.list.slice(10).map((a, i) => `<li class="${i + 11 <= 13 ? "t" : ""}"><span>${esc(a[0])}</span><small>${esc(a[1] || "")}${cat.offset ? ` · #${i + 11 + cat.offset} overall` : ""}</small></li>`).join("")}</ol>
+    </details>
+    ${cat.source ? `<p class="source">Source: ${esc(cat.source)}</p>` : ""}`;
+  const waitNote = `<p class="hint">${S.players.some(p => p.host) ? "The host starts the next round." : "The next round starts from the big screen."}</p>`;
+  return `
+  <section class="round-head">
+    <p class="eyebrow">${sd ? "Sudden death" : `Round ${S.roundIdx + 1} of ${S.queue.length}`} · scores</p>
+    <h2>${esc(cat.title)}</h2>
+  </section>
+  <div class="scoregrid">
+  <section class="panel stack" id="round-scores">
+    <span class="label">${sd ? "Sudden death" : "This round"}</span>
+    <ol class="roundres">${rows}</ol>
+  </section>
+  <section class="panel stack" id="total-scores">
+    <div class="row" style="justify-content: space-between; align-items: baseline"><h2>Scoreboard</h2><span class="eyebrow">after round ${Math.min(S.roundIdx + 1, S.queue.length)}</span></div>
+    <ol class="scores">${total}</ol>
+  </section>
+  </div>
+  <section class="panel stack">${histTableHTML()}${more}</section>
+  <div class="revealbar" role="region" aria-label="Next">
+    <span class="label">${sd ? "Sudden death done" : `Round ${S.roundIdx + 1} done`}</span>
+    ${S.mp && !S.mp.isHost ? waitNote : `<div class="row end"><button class="btn primary big" type="button" data-act="next">${last ? "See final results" : "Next round"}</button></div>`}
+  </div>`;
+}
 function standings() { return rankPlayers().arr; }
 /* slim score strip, shown on narrow screens where the scoreboard sits below the board */
 function scoreStripHTML() {
@@ -2003,13 +2123,7 @@ function renderSide() {
       <span class="nm">${esc(x.p.name)}${sub ? `<small>${sub}</small>` : ""}</span>
       <span class="tot">${x.t}</span></li>`;
   }).join("");
-  const played = S.players[0].rounds.length;
-  const hist = played ? `
-    <div class="hist-wrap"><table class="hist">
-      <thead><tr><th>Round</th>${S.players.map((p, i) => `<th style="${pc(i)}; color: var(--pc)">${esc(p.name.slice(0, 6))}</th>`).join("")}</tr></thead>
-      <tbody>${Array.from({ length: played }, (_, k) => `<tr><td>${k + 1}. ${esc(catById(S.queue[k])?.title || "")}</td>${S.players.map(p => `<td>${signed(p.rounds[k])}</td>`).join("")}</tr>`).join("")}</tbody>
-      <tfoot><tr><td>Total</td>${S.players.map(p => `<td>${p.total}</td>`).join("")}</tr></tfoot>
-    </table></div>` : `<p class="hint">Round results appear here after each round.</p>`;
+  const hist = histTableHTML();
   el.innerHTML = `
   <section class="panel stack">
     <div class="row" style="justify-content: space-between; align-items: baseline">
@@ -2321,6 +2435,12 @@ async function mpRevealStep(all) {
   const step = all ? 11 : Math.min(11, (st.step || 0) + 1);
   await mpWrite(Object.assign({}, st, { step, phase: step >= 11 ? "roundEnd" : "reveal" }));
 }
+/* after the danger zone: show the round's scores on every screen (step 12) */
+async function mpShowScores() {
+  const st = S.mp.room.state;
+  if (st.phase !== "roundEnd") return;
+  await mpWrite(Object.assign({}, st, { step: 12 }));
+}
 async function mpNext() {
   const st = S.mp.room.state;
   if (st.round + 1 < st.rounds) await mpStartRound(st, st.round + 1);
@@ -2551,10 +2671,10 @@ document.addEventListener("click", e => {
   if (act === "help") { S.ui.help = true; renderHelp(); return; }
   if (act === "helpclose") { S.ui.help = false; saveStore({ seenHelp: true }); renderHelp(); return; }
   if (act === "rollpause") { S.ui.rollPaused = !S.ui.rollPaused; if (!S.ui.rollPaused) S.ui.rollAt = Date.now() + 600; render(); return; }
-  if (S.mp && ["reveal", "revealall", "next", "again", "newgame", "quit", "sudden"].includes(act)) {
+  if (S.mp && ["reveal", "revealall", "scores", "next", "again", "newgame", "quit", "sudden"].includes(act)) {
     if (act === "quit" || act === "newgame") { mpAction(mpLeave); return; }
     if (!S.mp.isHost) return;
-    mpAction(act === "reveal" ? () => mpRevealStep(false) : act === "revealall" ? () => mpRevealStep(true) : act === "next" ? mpNext : act === "sudden" ? mpSudden : mpBackToLobby);
+    mpAction(act === "reveal" ? () => mpRevealStep(false) : act === "revealall" ? () => mpRevealStep(true) : act === "scores" ? mpShowScores : act === "next" ? mpNext : act === "sudden" ? mpSudden : mpBackToLobby);
     return;
   }
   if (act === "mode") { S.ui.mode = b.dataset.m; S.ui.mpErr = ""; saveStore({ mode: S.ui.mode }); render(); return; }
@@ -2610,6 +2730,7 @@ document.addEventListener("click", e => {
   }
   else if (act === "reveal") { revealStep(false); S.ui.scrollTo = S.round.step >= 11 ? "tension-panel" : "slot-" + S.round.step; }
   else if (act === "revealall") { revealStep(true); S.ui.scrollTo = "tension-panel"; }
+  else if (act === "scores") { S.round.step = 12; S.ui.scrollTo = "round-scores"; }
   else if (act === "next") nextRound();
   else if (act === "sudden") startSuddenDeath();
   else if (act === "again") startGame(true);
