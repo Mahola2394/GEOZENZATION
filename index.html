@@ -391,6 +391,18 @@ body.bigscreen .specs dd { font-size: 17px; }
 body.bigscreen .slot .ans b { font-size: 20px; }
 body.bigscreen .timer .secs { font-size: 56px; }
 
+/* score scale with zones */
+.scale { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.scale .zones { display: flex; gap: 3px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.scale .zones span { min-width: 0; }
+.scale .ladder { margin-top: 0; }
+.scale .ladder + .zones { margin-top: 6px; }
+.ladder.scored i.dz { background: var(--tension); }
+.ladder.scored i.dz12 { background: color-mix(in srgb, var(--tension) 82%, var(--surface)); }
+.ladder.scored i.dz13 { background: color-mix(in srgb, var(--tension) 64%, var(--surface)); }
+.ladder.scored .step.rest { flex: 7; }
+.ladder.scored .step.rest i { background: var(--miss); font-family: var(--body); font-weight: 700; font-size: 11.5px; text-align: center; padding: 0 6px; line-height: 1.1; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 <!-- phone mode: Supabase library, QR codes for the big screen, and this site's project details -->
@@ -413,7 +425,7 @@ body.bigscreen .timer .secs { font-size: 56px; }
 <script>
 /* ---------- data ----------
    list: full ranking, #1 first: [name, figure, aliases]
-   tension: ranks (above 10) that are tension answers */
+   tension: no longer used; #11–13 are always the danger zone */
 const BUILTIN = [
   { id: "nacap", title: "North American capitals", by: "by city population",
     prompt: "National capitals of North America, Central America and the Caribbean, ranked by population within city limits.",
@@ -916,7 +928,8 @@ function findMatch(guess, cat) {
   return bestD <= tol ? { rank: best.rank, member: best.member } : { rank: 0, member: "" };
 }
 function findRank(guess, cat) { return findMatch(guess, cat).rank; }
-/* kind: safe (#1-3), hit (#4-10), tension, ext (listed beyond 10), none, dup */
+/* kind: safe (#1-3), hit (#4-10), tension = the danger zone (#11-13), ext (listed from #14), none, dup */
+const dangerRanks = cat => [11, 12, 13].filter(r => r <= cat.list.length);
 /* like findMatch, but in hard mode also checks the part of the list above the starting point (above = its place there) */
 function matchAny(text, cat) {
   const m = findMatch(text, cat);
@@ -935,17 +948,17 @@ function judge(text, cat, seen) {
   if (!rank) return { text, rank: 0, kind: "none", pts: -3, max: cat.list.length + (cat.offset || 0) };
   if (rank <= 3) return { text, rank, member, kind: "safe", pts: rank - 4 }; /* #1 −3, #2 −2, #3 −1 */
   if (rank <= 10) return { text, rank, member, kind: "hit", pts: rank };
-  if (cat.tension.includes(rank)) return { text, rank, member, kind: "tension", pts: -5 };
+  if (rank >= 11 && rank <= 13) return { text, rank, member, kind: "tension", pts: rank - 16 }; /* danger zone: #11 −5, #12 −4, #13 −3 */
   return { text, rank, member, kind: "ext", pts: -3 };
 }
 const onBoard = a => a.kind === "safe" || a.kind === "hit";
-/* reveal steps: step k (1..10) uncovers rank k, from #1 down to #10; step 11 uncovers the tension answers and everything else */
+/* reveal steps: step k (1..10) uncovers rank k, from #1 down to #10; step 11 uncovers the danger zone and everything else */
 const isResolved = (a, step) => onBoard(a) ? step >= a.rank : step >= 11;
 function resultLabel(a) {
   switch (a.kind) {
     case "hit": return `#${a.rank} · +${a.rank}`;
     case "safe": return `#${a.rank} · safe −${4 - a.rank}`;
-    case "tension": return `#${a.rank} · tension −5`;
+    case "tension": return `#${a.rank} · danger zone −${16 - a.rank}`;
     case "ext": return `#${a.rank} · −3`;
     case "dup": return "repeat · 0";
     case "above": return `#${a.above} overall · above the start · −3`;
@@ -1333,9 +1346,9 @@ function customFormHTML() {
       <label class="stack" style="gap:6px"><span class="label">Title</span><input type="text" id="c-title" placeholder="Largest cities in Spain" required></label>
       <label class="stack" style="gap:6px"><span class="label">Ranked by</span><input type="text" id="c-by" placeholder="by population"></label>
     </div>
-    <label class="stack" style="gap:6px"><span class="label">The full ranking, number 1 first (at least 10 lines)</span>
-      <textarea id="c-list" rows="14" placeholder="Madrid / 3.4 M&#10;Barcelona / 1.7 M&#10;Valencia / 0.8 M&#10;…&#10;*Valladolid / 0.30 M&#10;*Vigo / 0.29 M&#10;Gijón / 0.27 M"></textarea></label>
-    <p class="hint">One answer per line. Start a line with <code>*</code> to make it a tension answer (only below number 10). After the answer you can add a figure and other accepted spellings, separated by slashes: <code>Seville / 0.69 M / sevilla</code>.</p>
+    <label class="stack" style="gap:6px"><span class="label">The full ranking, number 1 first (at least 13 lines)</span>
+      <textarea id="c-list" rows="14" placeholder="Madrid / 3.4 M&#10;Barcelona / 1.7 M&#10;Valencia / 0.8 M&#10;…&#10;Valladolid / 0.30 M&#10;Vigo / 0.29 M&#10;Gijón / 0.27 M"></textarea></label>
+    <p class="hint">One answer per line. Numbers 11 to 13 automatically become the danger zone. After the answer you can add a figure and other accepted spellings, separated by slashes: <code>Seville / 0.69 M / sevilla</code>.</p>
     ${S.ui.customErr ? `<p class="err">${esc(S.ui.customErr)}</p>` : ""}
     <div class="row end">
       <button class="btn" type="button" data-act="closecustom">Cancel</button>
@@ -1391,8 +1404,8 @@ function entryHTML() {
   </form>
   <section class="panel stack">
     <span class="label">What each place is worth</span>
-    <div class="ladder big">${Array.from({ length: 10 }, (_, i) => `<span style="--h: var(--h${i + 1})"><b>#${i + 1}</b><em>${worth(i + 1)}${i === 9 ? "★" : ""}</em></span>`).join("")}</div>
-    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2. Tension answers just outside the top 10 cost −5. Anything else costs −3.</p>
+    ${scaleHTML()}
+    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2.</p>
   </section>`;
 }
 /* a suggestion is pending when the text has a close known spelling the player hasn't kept on purpose */
@@ -1442,7 +1455,7 @@ function revealHTML() {
     return `<div class="acard" style="${pc(pi)}"><div class="acard-h"><span>${esc(pl.name)}</span><span class="v">${signed(roundPoints(pi, step))}</span></div><ol>${items}${pen}</ol></div>`;
   }).join("");
 
-  const nextLabel = step < 10 ? `Reveal #${step + 1}` : "Reveal tension answers";
+  const nextLabel = step < 10 ? `Reveal #${step + 1}` : "Reveal the danger zone";
   const controls = done ? `
     <div class="row end">
       <button class="btn primary big" type="button" data-act="next">${S.roundIdx + 1 >= S.queue.length ? "See final results" : "Next round"}</button>
@@ -1455,11 +1468,11 @@ function revealHTML() {
   const waitNote = S.mp && !S.mp.isHost ? `<p class="hint">${done ? (S.players.some(p => p.host) ? "The host starts the next round." : "The next round starts from the big screen.") : `${esc((S.players.find(p => p.host) || {}).name || (S.mp && S.mp.room ? "The big screen" : "The host"))} is revealing the list.`}</p>` : "";
   const more = done ? `
     <section class="panel stack" id="tension-panel">
-      <div class="tension-list"><span class="label">Tension answers</span>${cat.tension.map(rk => `<span class="chip t">#${rk} ${esc(cat.list[rk - 1][0])}</span>`).join("")}</div>
+      <div class="tension-list"><span class="label">Danger zone</span>${dangerRanks(cat).map(rk => `<span class="chip t">#${rk} ${esc(cat.list[rk - 1][0])} · −${16 - rk}</span>`).join("")}</div>
       ${cat.removed && cat.removed.length ? `<details class="more" open><summary>Cut off above the start: #1 to #${cat.removed.length} overall</summary>
         <ol class="rest" start="1">${cat.removed.map(a => `<li><span>${esc(a[0])}</span><small>${esc(a[1] || "")}</small></li>`).join("")}</ol></details>` : ""}
       ${cat.list.length > 10 ? `<details class="more"><summary>The rest of the list, #11 to #${cat.list.length}${cat.offset ? ` (#${11 + cat.offset} to #${cat.list.length + cat.offset} overall)` : ""}</summary>
-        <ol class="rest" start="11">${cat.list.slice(10).map((a, i) => `<li class="${cat.tension.includes(i + 11) ? "t" : ""}"><span>${esc(a[0])}</span><small>${esc(a[1] || "")}${cat.offset ? ` · #${i + 11 + cat.offset} overall` : ""}</small></li>`).join("")}</ol></details>` : ""}
+        <ol class="rest" start="11">${cat.list.slice(10).map((a, i) => `<li class="${i + 11 <= 13 ? "t" : ""}"><span>${esc(a[0])}</span><small>${esc(a[1] || "")}${cat.offset ? ` · #${i + 11 + cat.offset} overall` : ""}</small></li>`).join("")}</ol></details>` : ""}
       ${cat.source ? `<p class="source">Source: ${esc(cat.source)}</p>` : ""}
     </section>` : "";
 
@@ -1501,12 +1514,24 @@ function finalHTML() {
   </section>`;
 }
 
+
+/* the whole scoring scale: safe zone, scoring zone, danger zone, everything else */
+function scaleHTML() {
+  const top = Array.from({ length: 10 }, (_, i) => `<div class="step"><i style="--h: var(--h${i + 1})">${i + 1}</i><em class="${i < 3 ? "neg" : "pos"}">${worth(i + 1)}${i === 9 ? "<b>★</b>" : ""}</em></div>`).join("");
+  const danger = [11, 12, 13].map(r => `<div class="step"><i class="dz dz${r}">${r}</i><em class="neg">−${16 - r}</em></div>`).join("");
+  return `<div class="scale">
+    <div class="zones"><span style="flex: 3">Safe zone</span><span style="flex: 7">Scoring zone</span></div>
+    <div class="ladder scored">${top}</div>
+    <div class="zones"><span style="flex: 3">Danger zone</span><span style="flex: 7">Everything else</span></div>
+    <div class="ladder scored">${danger}<div class="step rest"><i>14+ · not on the list · no answer</i><em class="neg">−3</em></div></div>
+  </div>`;
+}
 /* "Canada · #5" — the player's answer this round and where it landed */
 function answerSummary(i) {
   const r = S.round, cat = catById(r.catId), a = ((r.answers || [])[i] || [])[0];
   if (!a || a.kind === "timeout") return "No answer";
   const name = a.member || (a.rank && cat && cat.list[a.rank - 1] ? cat.list[a.rank - 1][0] : a.above && cat && cat.removed ? cat.removed[a.above - 1][0] : a.text);
-  const pos = a.kind === "above" ? `#${a.above} overall, above the start` : a.kind === "dup" ? "repeat" : a.rank ? `#${a.rank}${a.kind === "tension" ? ", tension" : ""}` : "not on the list";
+  const pos = a.kind === "above" ? `#${a.above} overall, above the start` : a.kind === "dup" ? "repeat" : a.rank ? `#${a.rank}${a.kind === "tension" ? ", danger zone" : ""}` : "not on the list";
   return `${name} · ${pos}`;
 }
 function renderSide() {
@@ -1519,13 +1544,12 @@ function renderSide() {
       <ul class="rules">
         <li><span class="k hit">+N</span><span>Name number 4 to 10 and you score its place. Number 8 is worth 8 points.</span></li>
         <li><span class="k hit">★</span><span>Number 10 is the perfect answer. Name it and every other player loses 2.</span></li>
-        <li><span class="k m">−3…−1</span><span>Numbers 1, 2 and 3 are the safe answers: number 1 costs 3, number 2 costs 2 and number 3 costs 1.</span></li>
-        <li><span class="k t">−5</span><span>Tension answers just miss the top 10. Each list hides a few.</span></li>
-        <li><span class="k m">−3</span><span>Anything else. If it's further down the list, you'll see its place.</span></li>
+        <li><span class="k m">−3…−1</span><span>Safe zone: number 1 costs 3, number 2 costs 2 and number 3 costs 1.</span></li>
+        <li><span class="k t">−5…−3</span><span>Danger zone, just outside the top 10: number 11 costs 5, number 12 costs 4 and number 13 costs 3.</span></li>
+        <li><span class="k m">−3</span><span>Everything else: number 14 and below, anything not on the list, or no answer. You'll still see where it ranks.</span></li>
       </ul>
-      <div><span class="label">The board, summit to lowland</span>
-        <div class="ladder scored">${Array.from({ length: 10 }, (_, i) => `<div class="step"><i style="--h: var(--h${i + 1})">${i + 1}</i><em class="${i < 3 ? "neg" : "pos"}">${worth(i + 1)}${i === 9 ? "<b>★</b>" : ""}</em></div>`).join("")}</div></div>
-      <p class="hint">Each player writes one answer in secret, passing the screen around. No two players can pick the same answer, so going later in the round is harder. When everyone is done, the list is revealed from number 1 down to number 10, then the tension answers. Misspelled answers get a "did you mean" before you lock in.</p>
+      <div><span class="label">The scale</span>${scaleHTML()}</div>
+      <p class="hint">Each player writes one answer in secret, passing the screen around. No two players can pick the same answer, so going later in the round is harder. When everyone is done, the list is revealed from number 1 down to number 10, then the danger zone. Misspelled answers get a "did you mean" before you lock in.</p>
     </section>`;
     return;
   }
@@ -1947,8 +1971,8 @@ function mpScreenQuestionHTML() {
   </section>
   <section class="panel stack">
     <span class="label">What each place is worth</span>
-    <div class="ladder big">${Array.from({ length: 10 }, (_, i) => `<span style="--h: var(--h${i + 1})"><b>#${i + 1}</b><em>${worth(i + 1)}${i === 9 ? "★" : ""}</em></span>`).join("")}</div>
-    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2. Tension answers just outside the top 10 cost −5. Anything else costs −3.</p>
+    ${scaleHTML()}
+    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2.</p>
   </section>`;
 }
 function mpLobbyHTML() {
@@ -2005,8 +2029,8 @@ function mpQuestionHTML() {
   </section>
   <section class="panel stack">
     <span class="label">What each place is worth</span>
-    <div class="ladder big">${Array.from({ length: 10 }, (_, i) => `<span style="--h: var(--h${i + 1})"><b>#${i + 1}</b><em>${worth(i + 1)}${i === 9 ? "★" : ""}</em></span>`).join("")}</div>
-    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2. Tension answers just outside the top 10 cost −5. Anything else costs −3.</p>
+    ${scaleHTML()}
+    <p class="hint">★ Number 10 is the perfect answer: name it and everyone else loses 2.</p>
   </section>`;
 }
 function mpSideHTML() {
@@ -2146,7 +2170,7 @@ document.addEventListener("submit", e => {
     const by = document.getElementById("c-by").value.trim();
     const rows = parseLines(document.getElementById("c-list").value);
     if (!title) S.ui.customErr = "Give the list a title.";
-    else if (rows.length < 10) S.ui.customErr = `The ranking needs at least 10 lines. It has ${rows.length} now.`;
+    else if (rows.length < 13) S.ui.customErr = `The ranking needs at least 13 lines: the top 10 plus the danger zone. It has ${rows.length} now.`;
     else {
       const id = "c" + Date.now().toString(36);
       S.custom.push({ id, custom: true, title, by: by || "custom list", prompt: by ? `${title}, ranked ${by}.` : title + ".", source: "",
