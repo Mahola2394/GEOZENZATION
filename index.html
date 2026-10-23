@@ -343,6 +343,13 @@ ol.rest li.t span { color: var(--tension); }
 .revealbar { position: sticky; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 6; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; box-shadow: 0 8px 28px rgba(10, 25, 40, 0.22); }
 .revealbar .row.end { flex: 1 1 auto; }
+.revealbar .barleft { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.revealbar .quitlink { font-size: 13px; color: var(--muted); text-align: left; }
+@media (max-width: 880px) {
+  .revealbar { flex-wrap: nowrap; }
+  .revealbar .row.end { flex: 0 1 auto; flex-wrap: nowrap; }
+  .revealbar .quitlink .longer { display: none; }
+}
 .revealbar .hint { margin: 0; }
 .slot { scroll-margin: 90px 0 120px; }
 
@@ -452,7 +459,7 @@ body.revealing .slot .rk { font-size: clamp(18px, 3vh, 32px); }
 body.revealing .slot .end { padding-block: 2px; }
 body.revealing .revealbar { padding: 6px 10px; }
 @media (max-width: 880px) {
-  body.revealing .revealbar > .label { display: none; }
+  body.revealing .revealbar .barleft > .label { display: none; }
   body.revealing .slot .ans small { font-size: 11px; }
   body.revealing .acard { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 4px 8px; }
   body.revealing .acard-h { display: contents; }
@@ -1936,9 +1943,13 @@ function revealHTML() {
   <ol class="board" aria-label="Top 10">${slots}</ol>
   ${done ? dangerBarHTML(cat) : ""}
   <div class="revealbar" role="region" aria-label="Reveal controls">
-    <span class="label">${status}</span>
+    <span class="barleft"><span class="label">${status}</span>${quitLinkHTML()}</span>
     ${S.mp && !S.mp.isHost ? waitNote : controls}
   </div>`;
+}
+/* the scoreboard (with its "End game" button) is hidden during the reveal and score views, so the bottom bar carries one */
+function quitLinkHTML() {
+  return `<button type="button" class="linkbtn quitlink" data-act="quit">${S.mp ? (S.mp.isHost ? "Close the room" : "Leave the room") : `End game<span class="longer"> and return to setup</span>`}</button>`;
 }
 /* the danger zone, shown right under the board once the top 10 is out */
 function dangerBarHTML(cat) {
@@ -2007,7 +2018,7 @@ function scoresHTML(cat) {
   </div>
   <section class="panel stack">${histTableHTML()}${more}</section>
   <div class="revealbar" role="region" aria-label="Next">
-    <span class="label">${sd ? "Sudden death done" : `Round ${S.roundIdx + 1} done`}</span>
+    <span class="barleft"><span class="label">${sd ? "Sudden death done" : `Round ${S.roundIdx + 1} done`}</span>${quitLinkHTML()}</span>
     ${S.mp && !S.mp.isHost ? waitNote : `<div class="row end"><button class="btn primary big" type="button" data-act="next">${last ? "See final results" : "Next round"}</button></div>`}
   </div>`;
 }
